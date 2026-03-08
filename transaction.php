@@ -42,12 +42,18 @@ $result = $conn->query($sql);
             gap: 10px;
         }
 
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
         h2 {
             margin: 0;
         }
 
-        .add-btn {
-            background-color: #27ae60;
+        .add-btn,
+        .balance-btn {
             color: white;
             padding: 10px 16px;
             text-decoration: none;
@@ -56,8 +62,20 @@ $result = $conn->query($sql);
             display: inline-block;
         }
 
+        .add-btn {
+            background-color: #27ae60;
+        }
+
         .add-btn:hover {
             background-color: #219150;
+        }
+
+        .balance-btn {
+            background-color: #2980b9;
+        }
+
+        .balance-btn:hover {
+            background-color: #21618c;
         }
 
         .table-container {
@@ -113,7 +131,10 @@ $result = $conn->query($sql);
 
     <div class="page-header">
         <h2>Transaction List</h2>
-        <a href="transactionentry.php" class="add-btn">+ Add Transaction</a>
+        <div class="button-group">
+            <a href="transaction_entry.php" class="add-btn">+ Add Transaction</a>
+            <a href="balancesheetgen.php" class="balance-btn">Generate Balance Sheet</a>
+        </div>
     </div>
 
     <div class="table-container">
