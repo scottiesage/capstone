@@ -1,0 +1,128 @@
+-- =========================================
+-- DROP TABLES
+-- =========================================
+DROP TABLE IF EXISTS Alert;
+DROP TABLE IF EXISTS TransactionLine;
+DROP TABLE IF EXISTS `Transaction`;
+DROP TABLE IF EXISTS Vendor;
+DROP TABLE IF EXISTS Account;
+DROP TABLE IF EXISTS DetectionRule;
+DROP TABLE IF EXISTS `User`;
+
+-- =========================================
+-- USER TABLE
+-- =========================================
+CREATE TABLE `User` (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password_hash VARCHAR(255),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- =========================================
+-- ACCOUNT TABLE
+-- =========================================
+CREATE TABLE Account (
+    account_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    account_name VARCHAR(120) NOT NULL,
+    account_type ENUM('Asset','Liability','Equity','Revenue','Expense') NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_account_user
+        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- =========================================
+-- VENDOR TABLE
+-- =========================================
+CREATE TABLE Vendor (
+    vendor_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    vendor_name VARCHAR(120) NOT NULL,
+    email VARCHAR(120),
+    phone VARCHAR(30),
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_vendor_user
+        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- =========================================
+-- TRANSACTION TABLE
+-- =========================================
+CREATE TABLE `Transaction` (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    vendor_id INT NULL,
+    customer_name VARCHAR(120),
+    transaction_type ENUM('Sale', 'Purchase', 'Payment', 'Receipt') NOT NULL,
+    transaction_date DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    description VARCHAR(255),
+    memo VARCHAR(255),
+    category VARCHAR(100),
+    source VARCHAR(50) DEFAULT 'Manual',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_transaction_user
+        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_transaction_vendor
+        FOREIGN KEY (vendor_id) REFERENCES Vendor(vendor_id)
+        ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- =========================================
+-- TRANSACTION LINE TABLE
+-- =========================================
+CREATE TABLE TransactionLine (
+    transaction_line_id INT AUTO_INCREMENT PRIMARY KEY,
+    transaction_id INT NOT NULL,
+    account_id INT NOT NULL,
+    line_type ENUM('Debit','Credit') NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    memo VARCHAR(255),
+    CONSTRAINT fk_line_transaction
+        FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_line_account
+        FOREIGN KEY (account_id) REFERENCES Account(account_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- =========================================
+-- DETECTION RULE TABLE
+-- =========================================
+CREATE TABLE DetectionRule (
+    rule_id INT AUTO_INCREMENT PRIMARY KEY,
+    rule_name VARCHAR(120) NOT NULL,
+    rule_category ENUM('Error','Fraud') NOT NULL,
+    severity ENUM('Low','Medium','High') NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB;
+
+-- =========================================
+-- ALERT TABLE
+-- =========================================
+CREATE TABLE Alert (
+    alert_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    rule_id INT NOT NULL,
+    transaction_id INT NOT NULL,
+    status ENUM('Open','Reviewed','Dismissed','Resolved') NOT NULL DEFAULT 'Open',
+    message VARCHAR(255),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME NULL,
+    CONSTRAINT fk_alert_user
+        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_alert_rule
+        FOREIGN KEY (rule_id) REFERENCES DetectionRule(rule_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_alert_transaction
+        FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
