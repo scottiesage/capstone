@@ -1,25 +1,33 @@
 <?php
+include 'auth_check.php';
 include 'db_connect.php';
 
-$successMessage = "";
+$user_id = $_SESSION['user_id'];
+
 $errorMessage = "";
 
-// Handle form submission
+// Load vendors for this user
+$vendorStmt = $conn->prepare("SELECT vendor_id, vendor_name FROM Vendor WHERE user_id = ? ORDER BY vendor_name ASC");
+$vendorStmt->bind_param("i", $user_id);
+$vendorStmt->execute();
+$vendorResult = $vendorStmt->get_result();
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $user_id = 1; // hardcoded for now since you're using dummy data
-    $vendor_id = !empty($_POST['vendor_id']) ? $_POST['vendor_id'] : NULL;
+    $vendor_id = !empty($_POST['vendor_id']) ? (int)$_POST['vendor_id'] : null;
     $customer_name = trim($_POST['customer_name']);
     $transaction_type = $_POST['transaction_type'];
     $transaction_date = $_POST['transaction_date'];
-    $amount = $_POST['amount'];
+    $amount = (float)$_POST['amount'];
     $description = trim($_POST['description']);
     $memo = trim($_POST['memo']);
     $category = trim($_POST['category']);
     $source = trim($_POST['source']);
 
-    $stmt = $conn->prepare("INSERT INTO `Transaction`
+    $stmt = $conn->prepare("
+        INSERT INTO `Transaction`
         (user_id, vendor_id, customer_name, transaction_type, transaction_date, amount, description, memo, category, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
 
     $stmt->bind_param(
         "iisssdssss",
@@ -36,17 +44,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     );
 
     if ($stmt->execute()) {
-        $successMessage = "Transaction added successfully.";
+        header("Location: transaction.php");
+        exit();
     } else {
         $errorMessage = "Error adding transaction: " . $stmt->error;
     }
 
     $stmt->close();
 }
-
-// Load vendors for dropdown
-$vendorQuery = "SELECT vendor_id, vendor_name FROM Vendor ORDER BY vendor_name ASC";
-$vendorResult = $conn->query($vendorQuery);
 ?>
 
 <!DOCTYPE html>
@@ -70,6 +75,37 @@ $vendorResult = $conn->query($vendorQuery);
             padding: 25px 30px;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.08);
+        }
+
+        .top-links {
+            margin-bottom: 15px;
+        }
+
+        .back-btn,
+        .logout-btn {
+            display: inline-block;
+            margin-right: 10px;
+            padding: 10px 16px;
+            text-decoration: none;
+            color: white;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .back-btn {
+            background-color: #2c3e50;
+        }
+
+        .back-btn:hover {
+            background-color: #1f2d3a;
+        }
+
+        .logout-btn {
+            background-color: #c0392b;
+        }
+
+        .logout-btn:hover {
+            background-color: #a93226;
         }
 
         h2 {
@@ -105,7 +141,7 @@ $vendorResult = $conn->query($vendorQuery);
             margin-top: 20px;
             width: 100%;
             padding: 12px;
-            background-color: #2c3e50;
+            background-color: #27ae60;
             color: white;
             border: none;
             border-radius: 4px;
@@ -114,15 +150,7 @@ $vendorResult = $conn->query($vendorQuery);
         }
 
         .btn:hover {
-            background-color: #1f2d3a;
-        }
-
-        .success {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: #d4edda;
-            color: #155724;
-            border-radius: 4px;
+            background-color: #219150;
         }
 
         .error {
@@ -137,11 +165,12 @@ $vendorResult = $conn->query($vendorQuery);
 <body>
 
 <div class="container">
-    <h2>Transaction Entry</h2>
+    <div class="top-links">
+        <a href="transaction.php" class="back-btn">← Back to Transactions</a>
+        <a href="logout.php" class="logout-btn">Logout</a>
+    </div>
 
-    <?php if (!empty($successMessage)) : ?>
-        <div class="success"><?php echo htmlspecialchars($successMessage); ?></div>
-    <?php endif; ?>
+    <h2>Transaction Entry</h2>
 
     <?php if (!empty($errorMessage)) : ?>
         <div class="error"><?php echo htmlspecialchars($errorMessage); ?></div>
@@ -172,8 +201,8 @@ $vendorResult = $conn->query($vendorQuery);
             <?php
             if ($vendorResult && $vendorResult->num_rows > 0) {
                 while ($vendor = $vendorResult->fetch_assoc()) {
-                    echo "<option value='" . htmlspecialchars($vendor['vendor_id']) . "'>"
-                        . htmlspecialchars($vendor['vendor_name']) . "</option>";
+                    echo "<option value='" . htmlspecialchars($vendor['vendor_id']) . "'>" .
+                         htmlspecialchars($vendor['vendor_name']) . "</option>";
                 }
             }
             ?>
@@ -197,3 +226,8 @@ $vendorResult = $conn->query($vendorQuery);
 
 </body>
 </html>
+
+<?php
+$vendorStmt->close();
+$conn->close();
+?>

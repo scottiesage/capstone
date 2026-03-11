@@ -1,28 +1,37 @@
 <?php
+include 'auth_check.php';
 include 'db_connect.php';
 
-$sql = "SELECT
-            a.account_id,
-            a.account_name,
-            a.account_type,
-            COALESCE(SUM(CASE WHEN tl.line_type = 'Debit' THEN tl.amount ELSE 0 END), 0) AS total_debits,
-            COALESCE(SUM(CASE WHEN tl.line_type = 'Credit' THEN tl.amount ELSE 0 END), 0) AS total_credits,
-            CASE
-                WHEN a.account_type = 'Asset' THEN
-                    COALESCE(SUM(CASE WHEN tl.line_type = 'Debit' THEN tl.amount ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN tl.line_type = 'Credit' THEN tl.amount ELSE 0 END), 0)
-                WHEN a.account_type IN ('Liability', 'Equity') THEN
-                    COALESCE(SUM(CASE WHEN tl.line_type = 'Credit' THEN tl.amount ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN tl.line_type = 'Debit' THEN tl.amount ELSE 0 END), 0)
-                ELSE 0
-            END AS balance
-        FROM Account a
-        LEFT JOIN TransactionLine tl ON a.account_id = tl.account_id
-        WHERE a.account_type IN ('Asset', 'Liability', 'Equity')
-        GROUP BY a.account_id, a.account_name, a.account_type
-        ORDER BY a.account_type, a.account_name";
+$user_id = $_SESSION['user_id'];
 
-$result = $conn->query($sql);
+$sql = "
+    SELECT
+        a.account_id,
+        a.account_name,
+        a.account_type,
+        COALESCE(SUM(CASE WHEN tl.line_type = 'Debit' THEN tl.amount ELSE 0 END), 0) AS total_debits,
+        COALESCE(SUM(CASE WHEN tl.line_type = 'Credit' THEN tl.amount ELSE 0 END), 0) AS total_credits,
+        CASE
+            WHEN a.account_type = 'Asset' THEN
+                COALESCE(SUM(CASE WHEN tl.line_type = 'Debit' THEN tl.amount ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN tl.line_type = 'Credit' THEN tl.amount ELSE 0 END), 0)
+            WHEN a.account_type IN ('Liability', 'Equity') THEN
+                COALESCE(SUM(CASE WHEN tl.line_type = 'Credit' THEN tl.amount ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN tl.line_type = 'Debit' THEN tl.amount ELSE 0 END), 0)
+            ELSE 0
+        END AS balance
+    FROM Account a
+    LEFT JOIN TransactionLine tl ON a.account_id = tl.account_id
+    WHERE a.user_id = ?
+      AND a.account_type IN ('Asset', 'Liability', 'Equity')
+    GROUP BY a.account_id, a.account_name, a.account_type
+    ORDER BY a.account_type, a.account_name
+";
+
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
 $assets = [];
 $liabilities = [];
@@ -82,7 +91,8 @@ $isBalanced = round($total_assets, 2) == round(($total_liabilities + $total_equi
         }
 
         .back-btn,
-        .pdf-btn {
+        .pdf-btn,
+        .logout-btn {
             display: inline-block;
             padding: 10px 16px;
             border: none;
@@ -91,11 +101,11 @@ $isBalanced = round($total_assets, 2) == round(($total_liabilities + $total_equi
             text-decoration: none;
             cursor: pointer;
             font-size: 14px;
+            color: white;
         }
 
         .back-btn {
             background-color: #2c3e50;
-            color: white;
         }
 
         .back-btn:hover {
@@ -104,11 +114,18 @@ $isBalanced = round($total_assets, 2) == round(($total_liabilities + $total_equi
 
         .pdf-btn {
             background-color: #c0392b;
-            color: white;
         }
 
         .pdf-btn:hover {
             background-color: #a93226;
+        }
+
+        .logout-btn {
+            background-color: #7f8c8d;
+        }
+
+        .logout-btn:hover {
+            background-color: #636e72;
         }
 
         h1 {
@@ -220,6 +237,7 @@ $isBalanced = round($total_assets, 2) == round(($total_liabilities + $total_equi
     <div class="top-buttons">
         <a href="transaction.php" class="back-btn">← Back to Transactions</a>
         <button onclick="window.print()" class="pdf-btn">Save as PDF</button>
+        <a href="logout.php" class="logout-btn">Logout</a>
     </div>
 
     <h1>Balance Sheet</h1>
@@ -314,5 +332,6 @@ $isBalanced = round($total_assets, 2) == round(($total_liabilities + $total_equi
 </html>
 
 <?php
+$stmt->close();
 $conn->close();
 ?>

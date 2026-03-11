@@ -1,8 +1,8 @@
 <?php
 $host = "localhost";
-$username = "root";        // your mysql username
-$password = "";            // your mysql password
-$database = "capstone"; // your database name
+$username = "root";
+$password = "";
+$database = "capstone";
 
 $conn = new mysqli($host, $username, $password, $database);
 
