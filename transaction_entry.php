@@ -1,0 +1,449 @@
+<?php
+include 'auth_check.php';
+include 'db_connect.php';
+
+$user_id = $_SESSION['user_id'];
+$errorMessage = "";
+$showDuplicateWarning = false;
+$duplicateTransaction = null;
+
+$allowed_types = ['Sale', 'Purchase', 'Payment', 'Receipt', 'Journal Entry'];
+
+/*
+|--------------------------------------------------------------------------
+| Load vendors
+|--------------------------------------------------------------------------
+*/
+$vendorStmt = $conn->prepare("
+    SELECT vendor_id, vendor_name
+    FROM Vendor
+    WHERE user_id = ?
+    ORDER BY vendor_name ASC
+");
+$vendorStmt->bind_param("i", $user_id);
+$vendorStmt->execute();
+$vendorResult = $vendorStmt->get_result();
+
+/*
+|--------------------------------------------------------------------------
+| Load accounts
+|--------------------------------------------------------------------------
+*/
+$accountStmt = $conn->prepare("
+    SELECT account_id, account_name, account_type
+    FROM Account
+    WHERE user_id = ?
+    ORDER BY account_type ASC, account_name ASC
+");
+$accountStmt->bind_param("i", $user_id);
+$accountStmt->execute();
+$accountResult = $accountStmt->get_result();
+
+$accounts = [];
+while ($row = $accountResult->fetch_assoc()) {
+    $accounts[] = $row;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Default form values
+|--------------------------------------------------------------------------
+*/
+$vendor_id = '';
+$customer_name = '';
+$transaction_type = '';
+$transaction_date = '';
+$amount = '';
+$description = '';
+$memo = '';
+$category = '';
+$source = 'Manual';
+$debit_account_id = '';
+$credit_account_id = '';
+
+/*
+|--------------------------------------------------------------------------
+| Handle form submission
+|--------------------------------------------------------------------------
+*/
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $vendor_id = isset($_POST['vendor_id']) && $_POST['vendor_id'] !== '' ? (int)$_POST['vendor_id'] : null;
+    $customer_name = trim($_POST['customer_name'] ?? '');
+    $transaction_type = trim($_POST['transaction_type'] ?? '');
+    $transaction_date = trim($_POST['transaction_date'] ?? '');
+    $amount = trim($_POST['amount'] ?? '');
+    $description = trim($_POST['description'] ?? '');
+    $memo = trim($_POST['memo'] ?? '');
+    $category = trim($_POST['category'] ?? '');
+    $source = trim($_POST['source'] ?? 'Manual');
+    $debit_account_id = isset($_POST['debit_account_id']) ? (int)$_POST['debit_account_id'] : 0;
+    $credit_account_id = isset($_POST['credit_account_id']) ? (int)$_POST['credit_account_id'] : 0;
+    $force_insert = isset($_POST['force_insert']) && $_POST['force_insert'] === '1';
+
+    if (!in_array($transaction_type, $allowed_types)) {
+        $errorMessage = "Invalid transaction type.";
+    } elseif (empty($transaction_date)) {
+        $errorMessage = "Transaction date is required.";
+    } elseif ($amount === '' || !is_numeric($amount) || (float)$amount <= 0) {
+        $errorMessage = "Amount must be a valid number greater than 0.";
+    } elseif ($debit_account_id <= 0 || $credit_account_id <= 0) {
+        $errorMessage = "Both debit and credit accounts are required.";
+    } elseif ($debit_account_id === $credit_account_id) {
+        $errorMessage = "Debit and credit accounts cannot be the same.";
+    } else {
+        $amount = (float)$amount;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Duplicate check
+        |--------------------------------------------------------------------------
+        | Duplicate = same user + same date + same amount + same vendor_id
+        |--------------------------------------------------------------------------
+        */
+        if (!$force_insert) {
+            $duplicateStmt = null;
+
+            if ($vendor_id === null) {
+                $duplicateSql = "
+                    SELECT
+                        t.transaction_id,
+                        t.transaction_date,
+                        t.amount,
+                        t.description,
+                        v.vendor_name
+                    FROM `Transaction` t
+                    LEFT JOIN Vendor v
+                        ON t.vendor_id = v.vendor_id
+                    WHERE t.user_id = ?
+                      AND t.transaction_date = ?
+                      AND t.amount = ?
+                      AND t.vendor_id IS NULL
+                    LIMIT 1
+                ";
+
+                $duplicateStmt = $conn->prepare($duplicateSql);
+
+                if ($duplicateStmt) {
+                    $duplicateStmt->bind_param(
+                        "isd",
+                        $user_id,
+                        $transaction_date,
+                        $amount
+                    );
+                }
+            } else {
+                $duplicateSql = "
+                    SELECT
+                        t.transaction_id,
+                        t.transaction_date,
+                        t.amount,
+                        t.description,
+                        v.vendor_name
+                    FROM `Transaction` t
+                    LEFT JOIN Vendor v
+                        ON t.vendor_id = v.vendor_id
+                    WHERE t.user_id = ?
+                      AND t.transaction_date = ?
+                      AND t.amount = ?
+                      AND t.vendor_id = ?
+                    LIMIT 1
+                ";
+
+                $duplicateStmt = $conn->prepare($duplicateSql);
+
+                if ($duplicateStmt) {
+                    $duplicateStmt->bind_param(
+                        "isdi",
+                        $user_id,
+                        $transaction_date,
+                        $amount,
+                        $vendor_id
+                    );
+                }
+            }
+
+            if ($duplicateStmt) {
+                $duplicateStmt->execute();
+                $duplicateResult = $duplicateStmt->get_result();
+
+                if ($duplicateResult->num_rows > 0) {
+                    $showDuplicateWarning = true;
+                    $duplicateTransaction = $duplicateResult->fetch_assoc();
+                }
+
+                $duplicateStmt->close();
+            } else {
+                $errorMessage = "Prepare failed during duplicate check: " . $conn->error;
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Insert only if no duplicate warning is being shown
+        |--------------------------------------------------------------------------
+        */
+        if (empty($errorMessage) && !$showDuplicateWarning) {
+            $stmt = $conn->prepare("
+                INSERT INTO `Transaction`
+                (
+                    user_id,
+                    vendor_id,
+                    customer_name,
+                    transaction_type,
+                    transaction_date,
+                    amount,
+                    description,
+                    memo,
+                    category,
+                    source,
+                    debit_account_id,
+                    credit_account_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+
+            if ($stmt) {
+                $stmt->bind_param(
+                    "iisssdssssii",
+                    $user_id,
+                    $vendor_id,
+                    $customer_name,
+                    $transaction_type,
+                    $transaction_date,
+                    $amount,
+                    $description,
+                    $memo,
+                    $category,
+                    $source,
+                    $debit_account_id,
+                    $credit_account_id
+                );
+
+                if ($stmt->execute()) {
+                    header("Location: transaction.php");
+                    exit();
+                } else {
+                    $errorMessage = "Error adding transaction: " . $stmt->error;
+                }
+
+                $stmt->close();
+            } else {
+                $errorMessage = "Prepare failed: " . $conn->error;
+            }
+        }
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter Transaction</title>
+</head>
+<body>
+
+<h2>Transaction Entry</h2>
+
+<p>
+    <a href="transaction.php">Back to Transactions</a> |
+    <a href="dashboard.php">Dashboard</a> |
+    <a href="logout.php">Logout</a>
+</p>
+
+<?php if (!empty($errorMessage)) : ?>
+    <p style="color:red;"><strong><?php echo htmlspecialchars($errorMessage); ?></strong></p>
+<?php endif; ?>
+
+<form method="POST" action="">
+    <input type="hidden" name="force_insert" id="force_insert" value="0">
+
+    <label for="transaction_type">Transaction Type</label><br>
+    <select name="transaction_type" id="transaction_type" required>
+        <option value="">-- Select Type --</option>
+        <?php foreach ($allowed_types as $type): ?>
+            <option value="<?php echo htmlspecialchars($type); ?>" <?php echo ($transaction_type === $type) ? 'selected' : ''; ?>>
+                <?php echo htmlspecialchars($type); ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <br><br>
+
+    <label for="transaction_date">Date</label><br>
+    <input
+        type="date"
+        name="transaction_date"
+        id="transaction_date"
+        value="<?php echo htmlspecialchars($transaction_date); ?>"
+        required
+    >
+    <br><br>
+
+    <label for="amount">Amount</label><br>
+    <input
+        type="number"
+        step="0.01"
+        min="0.01"
+        name="amount"
+        id="amount"
+        value="<?php echo htmlspecialchars($amount); ?>"
+        required
+    >
+    <br><br>
+
+    <label for="customer_name">Customer</label><br>
+    <input
+        type="text"
+        name="customer_name"
+        id="customer_name"
+        value="<?php echo htmlspecialchars($customer_name); ?>"
+    >
+    <br><br>
+
+    <label for="vendor_id">Vendor</label><br>
+    <select name="vendor_id" id="vendor_id">
+        <option value="">-- No Vendor --</option>
+        <?php
+        if ($vendorResult && $vendorResult->num_rows > 0) {
+            while ($vendor = $vendorResult->fetch_assoc()) {
+                $selected = ($vendor_id !== null && $vendor_id !== '' && (int)$vendor_id === (int)$vendor['vendor_id']) ? 'selected' : '';
+                echo "<option value='" . htmlspecialchars($vendor['vendor_id']) . "' $selected>" .
+                     htmlspecialchars($vendor['vendor_name']) .
+                     "</option>";
+            }
+        }
+        ?>
+    </select>
+    <br><br>
+
+    <label for="debit_account_id">Debit Account</label><br>
+    <select name="debit_account_id" id="debit_account_id" required>
+        <option value="">-- Select Debit Account --</option>
+        <?php foreach ($accounts as $account): ?>
+            <option value="<?php echo (int)$account['account_id']; ?>" <?php echo ((int)$debit_account_id === (int)$account['account_id']) ? 'selected' : ''; ?>>
+                <?php echo htmlspecialchars($account['account_name'] . ' (' . $account['account_type'] . ')'); ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <br><br>
+
+    <label for="credit_account_id">Credit Account</label><br>
+    <select name="credit_account_id" id="credit_account_id" required>
+        <option value="">-- Select Credit Account --</option>
+        <?php foreach ($accounts as $account): ?>
+            <option value="<?php echo (int)$account['account_id']; ?>" <?php echo ((int)$credit_account_id === (int)$account['account_id']) ? 'selected' : ''; ?>>
+                <?php echo htmlspecialchars($account['account_name'] . ' (' . $account['account_type'] . ')'); ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <br><br>
+
+    <label for="description">Description</label><br>
+    <input
+        type="text"
+        name="description"
+        id="description"
+        value="<?php echo htmlspecialchars($description); ?>"
+    >
+    <br><br>
+
+    <label for="memo">Memo</label><br>
+    <textarea name="memo" id="memo"><?php echo htmlspecialchars($memo); ?></textarea>
+    <br><br>
+
+    <label for="category">Category</label><br>
+    <input
+        type="text"
+        name="category"
+        id="category"
+        value="<?php echo htmlspecialchars($category); ?>"
+    >
+    <br><br>
+
+    <label for="source">Source</label><br>
+    <input
+        type="text"
+        name="source"
+        id="source"
+        value="<?php echo htmlspecialchars($source); ?>"
+    >
+    <br><br>
+
+    <button type="submit">Save Transaction</button>
+</form>
+
+<?php if ($showDuplicateWarning): ?>
+    <div style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+    ">
+        <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            width: 460px;
+            box-shadow: 0 0 12px rgba(0,0,0,0.25);
+        ">
+            <h3 style="color:red; margin-top:0;">Duplicate Transaction Warning</h3>
+            <p>A transaction with the same date, amount, and vendor already exists.</p>
+
+            <?php if ($duplicateTransaction): ?>
+                <div style="
+                    margin: 15px 0;
+                    padding: 12px;
+                    border: 1px solid #ccc;
+                    border-radius: 6px;
+                    background: #f9f9f9;
+                    text-align: left;
+                ">
+                    <p><strong>Existing Transaction ID:</strong> <?php echo (int)$duplicateTransaction['transaction_id']; ?></p>
+                    <p><strong>Date:</strong> <?php echo htmlspecialchars($duplicateTransaction['transaction_date']); ?></p>
+                    <p><strong>Amount:</strong> $<?php echo number_format((float)$duplicateTransaction['amount'], 2); ?></p>
+                    <p><strong>Vendor:</strong> <?php echo htmlspecialchars($duplicateTransaction['vendor_name'] ?? 'No Vendor'); ?></p>
+                    <p><strong>Description:</strong> <?php echo htmlspecialchars($duplicateTransaction['description'] ?? ''); ?></p>
+                </div>
+            <?php endif; ?>
+
+            <p>Do you want to proceed anyway?</p>
+
+            <button type="button" onclick="proceedInsert()" style="margin-right: 10px;">
+                Proceed
+            </button>
+
+            <button type="button" onclick="closeWarning()">
+                Cancel
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function proceedInsert() {
+            document.getElementById('force_insert').value = '1';
+            document.forms[0].submit();
+        }
+
+        function closeWarning() {
+            window.location.href = 'transaction_entry.php';
+        }
+    </script>
+<?php endif; ?>
+
+</body>
+</html>
+
+<?php
+$vendorStmt->close();
+$accountStmt->close();
+$conn->close();
+?>

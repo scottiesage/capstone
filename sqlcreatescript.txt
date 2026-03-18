@@ -1,128 +1,183 @@
--- =========================================
--- DROP TABLES
--- =========================================
-DROP TABLE IF EXISTS Alert;
-DROP TABLE IF EXISTS TransactionLine;
-DROP TABLE IF EXISTS `Transaction`;
-DROP TABLE IF EXISTS Vendor;
-DROP TABLE IF EXISTS Account;
-DROP TABLE IF EXISTS DetectionRule;
-DROP TABLE IF EXISTS `User`;
+DROP DATABASE IF EXISTS capstone;
+CREATE DATABASE capstone;
+USE capstone;
 
--- =========================================
 -- USER TABLE
--- =========================================
-CREATE TABLE `User` (
+CREATE TABLE User (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(150) NOT NULL UNIQUE,
-    password_hash VARCHAR(255),
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+    password_hash VARCHAR(255) NOT NULL,
 
--- =========================================
+    -- 2FA FIELDS
+    verification_code VARCHAR(10) DEFAULT NULL,
+    verification_expires DATETIME DEFAULT NULL,
+    is_verified BOOLEAN DEFAULT FALSE,
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ACCOUNT TABLE
--- =========================================
 CREATE TABLE Account (
     account_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     account_name VARCHAR(120) NOT NULL,
-    account_type ENUM('Asset','Liability','Equity','Revenue','Expense') NOT NULL,
-    is_active TINYINT(1) NOT NULL DEFAULT 1,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_account_user
-        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
-        ON DELETE CASCADE
-) ENGINE=InnoDB;
+    account_type ENUM('Asset','Liability','Equity','Revenue','Expense'),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE
+);
 
--- =========================================
 -- VENDOR TABLE
--- =========================================
 CREATE TABLE Vendor (
     vendor_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    vendor_name VARCHAR(120) NOT NULL,
+    vendor_name VARCHAR(120),
     email VARCHAR(120),
-    phone VARCHAR(30),
-    is_active TINYINT(1) NOT NULL DEFAULT 1,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_vendor_user
-        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
-        ON DELETE CASCADE
-) ENGINE=InnoDB;
+    phone VARCHAR(50),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE
+);
 
--- =========================================
 -- TRANSACTION TABLE
--- =========================================
 CREATE TABLE `Transaction` (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    vendor_id INT NULL,
+    vendor_id INT,
     customer_name VARCHAR(120),
-    transaction_type ENUM('Sale', 'Purchase', 'Payment', 'Receipt') NOT NULL,
-    transaction_date DATE NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
+    transaction_type ENUM('Sale','Purchase','Payment','Receipt'),
+    transaction_date DATE,
+    amount DECIMAL(10,2),
     description VARCHAR(255),
     memo VARCHAR(255),
     category VARCHAR(100),
-    source VARCHAR(50) DEFAULT 'Manual',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_transaction_user
-        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_transaction_vendor
-        FOREIGN KEY (vendor_id) REFERENCES Vendor(vendor_id)
-        ON DELETE SET NULL
-) ENGINE=InnoDB;
+    source VARCHAR(50),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (vendor_id) REFERENCES Vendor(vendor_id) ON DELETE SET NULL
+);
 
--- =========================================
 -- TRANSACTION LINE TABLE
--- =========================================
 CREATE TABLE TransactionLine (
     transaction_line_id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_id INT NOT NULL,
     account_id INT NOT NULL,
-    line_type ENUM('Debit','Credit') NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
+    line_type ENUM('Debit','Credit'),
+    amount DECIMAL(10,2),
     memo VARCHAR(255),
-    CONSTRAINT fk_line_transaction
-        FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_line_account
-        FOREIGN KEY (account_id) REFERENCES Account(account_id)
-        ON DELETE CASCADE
-) ENGINE=InnoDB;
+    FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES Account(account_id) ON DELETE CASCADE
+);
 
--- =========================================
 -- DETECTION RULE TABLE
--- =========================================
 CREATE TABLE DetectionRule (
     rule_id INT AUTO_INCREMENT PRIMARY KEY,
-    rule_name VARCHAR(120) NOT NULL,
-    rule_category ENUM('Error','Fraud') NOT NULL,
-    severity ENUM('Low','Medium','High') NOT NULL,
-    is_active TINYINT(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB;
+    rule_name VARCHAR(120),
+    rule_category ENUM('Error','Fraud'),
+    severity ENUM('Low','Medium','High'),
+    is_active BOOLEAN DEFAULT TRUE
+);
 
--- =========================================
 -- ALERT TABLE
--- =========================================
 CREATE TABLE Alert (
     alert_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    rule_id INT NOT NULL,
-    transaction_id INT NOT NULL,
-    status ENUM('Open','Reviewed','Dismissed','Resolved') NOT NULL DEFAULT 'Open',
+    rule_id INT,
+    transaction_id INT,
+    status ENUM('Open','Reviewed','Resolved') DEFAULT 'Open',
     message VARCHAR(255),
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at DATETIME NULL,
-    CONSTRAINT fk_alert_user
-        FOREIGN KEY (user_id) REFERENCES `User`(user_id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_alert_rule
-        FOREIGN KEY (rule_id) REFERENCES DetectionRule(rule_id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_alert_transaction
-        FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id)
-        ON DELETE CASCADE
-) ENGINE=InnoDB;
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (rule_id) REFERENCES DetectionRule(rule_id) ON DELETE SET NULL,
+    FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id) ON DELETE SET NULL
+);
+
+-- =========================
+-- 👤 SAMPLE USERS
+-- Password for both: password123
+-- (Generate your own hash with PHP if needed)
+-- =========================
+INSERT INTO User (email, password_hash)
+VALUES
+('testuser@example.com', '$2y$10$zG2BDB8Lazc.Vqi4DhnN8Ogjvx5FTX3rljXHsPujuVBCnzAylaegy'),
+('demo@example.com', '$2y$10$zG2BDB8Lazc.Vqi4DhnN8Ogjvx5FTX3rljXHsPujuVBCnzAylaegy');
+
+-- =========================
+-- 🏦 SAMPLE ACCOUNTS
+-- =========================
+INSERT INTO Account (user_id, account_name, account_type)
+VALUES
+(1, 'Cash', 'Asset'),
+(1, 'Accounts Receivable', 'Asset'),
+(1, 'Accounts Payable', 'Liability'),
+(1, 'Owner Equity', 'Equity'),
+(1, 'Sales Revenue', 'Revenue'),
+(1, 'Office Supplies Expense', 'Expense');
+
+-- =========================
+-- 🧾 SAMPLE VENDORS
+-- =========================
+INSERT INTO Vendor (user_id, vendor_name, email, phone)
+VALUES
+(1, 'Amazon', 'support@amazon.com', '800-123-4567'),
+(1, 'Staples', 'support@staples.com', '800-222-3333'),
+(1, 'Client A', 'clienta@email.com', '757-555-1111');
+
+-- =========================
+-- 💳 SAMPLE TRANSACTIONS
+-- =========================
+INSERT INTO `Transaction`
+(user_id, vendor_id, customer_name, transaction_type, transaction_date, amount, description, category, source)
+VALUES
+(1, 1, NULL, 'Purchase', '2026-03-01', 150.00, 'Office supplies purchase', 'Supplies', 'Manual'),
+(1, 2, NULL, 'Purchase', '2026-03-02', 200.00, 'Printer purchase', 'Equipment', 'Manual'),
+(1, 3, 'Client A', 'Sale', '2026-03-03', 500.00, 'Consulting revenue', 'Income', 'Manual'),
+
+-- Duplicate-style transaction (for fraud detection testing)
+(1, 1, NULL, 'Purchase', '2026-03-01', 150.00, 'Duplicate office supplies', 'Supplies', 'Manual');
+
+-- =========================
+-- 🔁 TRANSACTION LINES (DEBIT/CREDIT)
+-- =========================
+-- Transaction 1
+INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
+VALUES
+(1, 6, 'Debit', 150.00),   -- Expense
+(1, 1, 'Credit', 150.00);  -- Cash
+
+-- Transaction 2
+INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
+VALUES
+(2, 6, 'Debit', 200.00),
+(2, 1, 'Credit', 200.00);
+
+-- Transaction 3 (Revenue)
+INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
+VALUES
+(3, 1, 'Debit', 500.00),   -- Cash
+(3, 5, 'Credit', 500.00);  -- Revenue
+
+-- Transaction 4 (Duplicate test)
+INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
+VALUES
+(4, 6, 'Debit', 150.00),
+(4, 1, 'Credit', 150.00);
+
+-- =========================
+-- 🚨 DETECTION RULES
+-- =========================
+INSERT INTO DetectionRule (rule_name, rule_category, severity)
+VALUES
+('Duplicate Transaction', 'Error', 'High'),
+('Unusual Amount', 'Fraud', 'Medium'),
+('High Frequency Vendor Usage', 'Fraud', 'Medium');
+
+-- =========================
+-- ⚠️ SAMPLE ALERTS
+-- =========================
+INSERT INTO Alert (user_id, rule_id, transaction_id, status, message)
+VALUES
+(1, 1, 4, 'Open', 'Possible duplicate transaction detected'),
+(1, 2, 3, 'Open', 'Transaction amount higher than usual'),
+(1, 3, 1, 'Reviewed', 'Multiple transactions with same vendor in short period');

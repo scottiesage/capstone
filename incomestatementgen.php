@@ -4,25 +4,21 @@ include 'db_connect.php';
 
 $user_id = $_SESSION['user_id'];
 
-$assets = [];
-$liabilities = [];
-$equity = [];
+$revenues = [];
+$expenses = [];
 
-$total_assets = 0;
-$total_liabilities = 0;
-$total_equity = 0;
+$total_revenue = 0;
+$total_expenses = 0;
+$net_income = 0;
 $errorMessage = "";
 
 /*
 |--------------------------------------------------------------------------
-| Get balances for all accounts
+| Get balances for revenue and expense accounts
 |--------------------------------------------------------------------------
 | Rules:
-| Asset, Expense     => Debit increases, Credit decreases
+| Asset, Expense => Debit increases, Credit decreases
 | Liability, Equity, Revenue => Credit increases, Debit decreases
-|
-| For the balance sheet, we only display:
-| Asset, Liability, Equity
 |--------------------------------------------------------------------------
 */
 $sql = "
@@ -50,10 +46,10 @@ $sql = "
         ON a.account_id = t.debit_account_id
         OR a.account_id = t.credit_account_id
     WHERE a.user_id = ?
-      AND a.account_type IN ('Asset', 'Liability', 'Equity')
+      AND a.account_type IN ('Revenue', 'Expense')
     GROUP BY a.account_id, a.account_name, a.account_type
     ORDER BY
-        FIELD(a.account_type, 'Asset', 'Liability', 'Equity'),
+        FIELD(a.account_type, 'Revenue', 'Expense'),
         a.account_name ASC
 ";
 
@@ -69,23 +65,19 @@ if (!$stmt) {
     while ($row = $result->fetch_assoc()) {
         $row['balance'] = (float)$row['balance'];
 
-        if ($row['account_type'] === 'Asset') {
-            $assets[] = $row;
-            $total_assets += $row['balance'];
-        } elseif ($row['account_type'] === 'Liability') {
-            $liabilities[] = $row;
-            $total_liabilities += $row['balance'];
-        } elseif ($row['account_type'] === 'Equity') {
-            $equity[] = $row;
-            $total_equity += $row['balance'];
+        if ($row['account_type'] === 'Revenue') {
+            $revenues[] = $row;
+            $total_revenue += $row['balance'];
+        } elseif ($row['account_type'] === 'Expense') {
+            $expenses[] = $row;
+            $total_expenses += $row['balance'];
         }
     }
 
     $stmt->close();
 }
 
-$total_liabilities_and_equity = $total_liabilities + $total_equity;
-$is_balanced = abs($total_assets - $total_liabilities_and_equity) < 0.01;
+$net_income = $total_revenue - $total_expenses;
 
 $conn->close();
 ?>
@@ -95,14 +87,16 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Balance Sheet</title>
+    <title>Income Statement</title>
 </head>
 <body>
 
-<h2>Balance Sheet</h2>
+<h2>Income Statement</h2>
 
 <p>
-    <a href="transaction.php">Back to Transactions</a> |
+    <a href="dashboard.php">Back to Dashboard</a> |
+    <a href="transaction.php">View Transactions</a> |
+    <a href="balancesheetgen.php">View Balance Sheet</a> |
     <a href="logout.php">Logout</a>
 </p>
 
@@ -110,86 +104,59 @@ $conn->close();
     <p style="color: red;"><?php echo htmlspecialchars($errorMessage); ?></p>
 <?php else : ?>
 
-    <h3>Assets</h3>
-    <?php if (count($assets) > 0): ?>
+    <h3>Revenue</h3>
+    <?php if (count($revenues) > 0): ?>
         <table border="1" cellpadding="8" cellspacing="0">
             <tr>
                 <th>Account</th>
                 <th>Balance</th>
             </tr>
-            <?php foreach ($assets as $account): ?>
+            <?php foreach ($revenues as $account): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($account['account_name']); ?></td>
                     <td>$<?php echo number_format($account['balance'], 2); ?></td>
                 </tr>
             <?php endforeach; ?>
             <tr>
-                <th>Total Assets</th>
-                <th>$<?php echo number_format($total_assets, 2); ?></th>
+                <th>Total Revenue</th>
+                <th>$<?php echo number_format($total_revenue, 2); ?></th>
             </tr>
         </table>
     <?php else: ?>
-        <p>No asset accounts found.</p>
+        <p>No revenue accounts found.</p>
     <?php endif; ?>
 
     <br>
 
-    <h3>Liabilities</h3>
-    <?php if (count($liabilities) > 0): ?>
+    <h3>Expenses</h3>
+    <?php if (count($expenses) > 0): ?>
         <table border="1" cellpadding="8" cellspacing="0">
             <tr>
                 <th>Account</th>
                 <th>Balance</th>
             </tr>
-            <?php foreach ($liabilities as $account): ?>
+            <?php foreach ($expenses as $account): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($account['account_name']); ?></td>
                     <td>$<?php echo number_format($account['balance'], 2); ?></td>
                 </tr>
             <?php endforeach; ?>
             <tr>
-                <th>Total Liabilities</th>
-                <th>$<?php echo number_format($total_liabilities, 2); ?></th>
+                <th>Total Expenses</th>
+                <th>$<?php echo number_format($total_expenses, 2); ?></th>
             </tr>
         </table>
     <?php else: ?>
-        <p>No liability accounts found.</p>
+        <p>No expense accounts found.</p>
     <?php endif; ?>
 
     <br>
 
-    <h3>Equity</h3>
-    <?php if (count($equity) > 0): ?>
-        <table border="1" cellpadding="8" cellspacing="0">
-            <tr>
-                <th>Account</th>
-                <th>Balance</th>
-            </tr>
-            <?php foreach ($equity as $account): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($account['account_name']); ?></td>
-                    <td>$<?php echo number_format($account['balance'], 2); ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <tr>
-                <th>Total Equity</th>
-                <th>$<?php echo number_format($total_equity, 2); ?></th>
-            </tr>
-        </table>
+    <h3>Net Income</h3>
+    <?php if ($net_income >= 0): ?>
+        <p style="color: green;"><strong>Net Income:</strong> $<?php echo number_format($net_income, 2); ?></p>
     <?php else: ?>
-        <p>No equity accounts found.</p>
-    <?php endif; ?>
-
-    <br>
-
-    <h3>Balance Check</h3>
-    <p><strong>Total Assets:</strong> $<?php echo number_format($total_assets, 2); ?></p>
-    <p><strong>Total Liabilities + Equity:</strong> $<?php echo number_format($total_liabilities_and_equity, 2); ?></p>
-
-    <?php if ($is_balanced): ?>
-        <p style="color: green;"><strong>Balanced:</strong> Assets = Liabilities + Equity</p>
-    <?php else: ?>
-        <p style="color: red;"><strong>Not Balanced:</strong> Assets do not equal Liabilities + Equity</p>
+        <p style="color: red;"><strong>Net Loss:</strong> $<?php echo number_format(abs($net_income), 2); ?></p>
     <?php endif; ?>
 
 <?php endif; ?>
