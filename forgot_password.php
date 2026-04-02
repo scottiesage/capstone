@@ -1,32 +1,21 @@
 <?php
 session_start();
 require_once 'db_connect.php';
+require_once 'send_verification_email.php';
 
 $errorMessage = "";
 $successMessage = "";
 
-// Optional flash message from other pages
-if (isset($_SESSION['login_error'])) {
-    $errorMessage = $_SESSION['login_error'];
-    unset($_SESSION['login_error']);
-}
-
-if (isset($_SESSION['login_success'])) {
-    $successMessage = $_SESSION['login_success'];
-    unset($_SESSION['login_success']);
-}
-
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
 
-    if (empty($email) || empty($password)) {
-        $errorMessage = "Please enter both email and password.";
+    if (empty($email)) {
+        $errorMessage = "Please enter your email address.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errorMessage = "Please enter a valid email address.";
     } else {
         $stmt = $conn->prepare("
-            SELECT user_id, email, password_hash, is_verified
+            SELECT user_id, email
             FROM User
             WHERE email = ?
             LIMIT 1
@@ -41,25 +30,41 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $user = $result->fetch_assoc();
             $stmt->close();
 
-            if (!$user || !password_verify($password, $user['password_hash'])) {
-                $errorMessage = "Invalid email or password.";
-            } elseif ((int)$user['is_verified'] === 0) {
-                $_SESSION['pending_user_id'] = $user['user_id'];
-                $_SESSION['pending_user_email'] = $user['email'];
-                $_SESSION['verify_error'] = "Please verify your email before logging in.";
+            if ($user) {
+                $code = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
+                $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
 
-                header("Location: verify_code.php");
-                exit();
+                $update = $conn->prepare("
+                    UPDATE User
+                    SET reset_code = ?, reset_expires = ?
+                    WHERE user_id = ?
+                ");
+
+                if (!$update) {
+                    $errorMessage = "Database error: " . $conn->error;
+                } else {
+                    $update->bind_param("ssi", $code, $expires, $user['user_id']);
+
+                    if ($update->execute()) {
+                        $_SESSION['reset_email'] = $user['email'];
+
+                        $emailResult = sendPasswordResetEmail($user['email'], $code);
+
+                        if ($emailResult['success']) {
+                            $_SESSION['reset_success'] = "A password reset code has been sent to your email.";
+                            header("Location: reset_password.php");
+                            exit();
+                        } else {
+                            $errorMessage = "Email failed: " . $emailResult['message'];
+                        }
+                    } else {
+                        $errorMessage = "Failed to create reset code.";
+                    }
+
+                    $update->close();
+                }
             } else {
-                session_regenerate_id(true);
-
-                $_SESSION['user_id'] = $user['user_id'];
-                $_SESSION['user_email'] = $user['email'];
-
-                unset($_SESSION['pending_user_id'], $_SESSION['pending_user_email']);
-
-                header("Location: dashboard.php");
-                exit();
+                $errorMessage = "No account found with that email address.";
             }
         }
     }
@@ -71,7 +76,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>Forgot Password</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -119,8 +124,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             margin-bottom: 8px;
         }
 
-        input[type="email"],
-        input[type="password"] {
+        input[type="email"] {
             width: 100%;
             padding: 10px;
             box-sizing: border-box;
@@ -141,11 +145,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             cursor: pointer;
         }
 
-        button:hover {
-            background: #1a68d1;
-        }
-
-        .register-link {
+        .back-link {
             display: block;
             text-align: center;
             margin-top: 15px;
@@ -157,7 +157,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body>
 
 <div class="container">
-    <h2>Login</h2>
+    <h2>Forgot Password</h2>
 
     <?php if (!empty($errorMessage)): ?>
         <div class="message-error"><?php echo htmlspecialchars($errorMessage); ?></div>
@@ -168,7 +168,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <?php endif; ?>
 
     <form method="POST" action="">
-        <label for="email">Email</label>
+        <label for="email">Enter your email</label>
         <input
             type="email"
             id="email"
@@ -176,22 +176,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>"
             required
         >
-
-        <label for="password">Password</label>
-        <input
-            type="password"
-            id="password"
-            name="password"
-            required
-        >
-
-        <button type="submit">Login</button>
+        <button type="submit">Send Reset Code</button>
     </form>
 
-    <div style="text-align:center; margin-top:15px;">
-    <a class="register-link" href="forgot_password.php">Forgot Password?</a>
-    <a class="register-link" href="register.php">Create Account</a>
-    </div>
+    <a class="back-link" href="login.php">Back to Login</a>
 </div>
 
 </body>

@@ -1,42 +1,114 @@
 <?php
-include 'db_connect.php';
+session_start();
+require_once 'db_connect.php';
+require_once 'send_verification_email.php';
 
-$successMessage = "";
 $errorMessage = "";
+$successMessage = "";
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
-    $confirmPassword = $_POST['confirm_password'];
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $confirm = $_POST['confirm_password'] ?? '';
 
-    if (empty($email) || empty($password) || empty($confirmPassword)) {
-        $errorMessage = "Please fill in all fields.";
-    } elseif ($password !== $confirmPassword) {
+    // Basic validation
+    if (empty($email) || empty($password) || empty($confirm)) {
+        $errorMessage = "All fields are required.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errorMessage = "Please enter a valid email address.";
+    } elseif ($password !== $confirm) {
         $errorMessage = "Passwords do not match.";
+    } elseif (strlen($password) < 8) {
+        $errorMessage = "Password must be at least 8 characters long.";
     } else {
-        $checkStmt = $conn->prepare("SELECT user_id FROM `User` WHERE email = ?");
-        $checkStmt->bind_param("s", $email);
-        $checkStmt->execute();
-        $checkResult = $checkStmt->get_result();
-
-        if ($checkResult->num_rows > 0) {
-            $errorMessage = "That email is already registered.";
+        // Check if email already exists
+        $check = $conn->prepare("SELECT user_id, is_verified FROM User WHERE email = ?");
+        if (!$check) {
+            $errorMessage = "Database error: " . $conn->error;
         } else {
-            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $check->bind_param("s", $email);
+            $check->execute();
+            $result = $check->get_result();
+            $existingUser = $result->fetch_assoc();
+            $check->close();
 
-            $stmt = $conn->prepare("INSERT INTO `User` (email, password_hash) VALUES (?, ?)");
-            $stmt->bind_param("ss", $email, $hashedPassword);
+            if ($existingUser) {
+                if ((int)$existingUser['is_verified'] === 1) {
+                    $errorMessage = "An account with that email already exists.";
+                } else {
+                    // Update unverified account with a new code instead of making duplicate account
+                    $code = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
+                    $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+                    $hash = password_hash($password, PASSWORD_DEFAULT);
 
-            if ($stmt->execute()) {
-                $successMessage = "Registration successful. You can now log in.";
+                    $update = $conn->prepare("
+                        UPDATE User
+                        SET password_hash = ?, verification_code = ?, verification_expires = ?
+                        WHERE user_id = ?
+                    ");
+
+                    if (!$update) {
+                        $errorMessage = "Database error: " . $conn->error;
+                    } else {
+                        $update->bind_param("sssi", $hash, $code, $expires, $existingUser['user_id']);
+
+                        if ($update->execute()) {
+                            $_SESSION['pending_user_id'] = $existingUser['user_id'];
+                            $_SESSION['pending_user_email'] = $email;
+
+                            $emailResult = sendVerificationEmail($email, $code);
+
+                            if ($emailResult['success']) {
+                                header("Location: verify_code.php");
+                                exit();
+                            } else {
+                                $errorMessage = "Account saved, but email failed: " . $emailResult['message'];
+                            }
+                        } else {
+                            $errorMessage = "Failed to update account.";
+                        }
+
+                        $update->close();
+                    }
+                }
             } else {
-                $errorMessage = "Error creating account.";
+                // Create new account
+                $hash = password_hash($password, PASSWORD_DEFAULT);
+                $code = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
+                $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+
+                $insert = $conn->prepare("
+                    INSERT INTO User (email, password_hash, verification_code, verification_expires, is_verified)
+                    VALUES (?, ?, ?, ?, 0)
+                ");
+
+                if (!$insert) {
+                    $errorMessage = "Database error: " . $conn->error;
+                } else {
+                    $insert->bind_param("ssss", $email, $hash, $code, $expires);
+
+                    if ($insert->execute()) {
+                        $user_id = $insert->insert_id;
+
+                        $_SESSION['pending_user_id'] = $user_id;
+                        $_SESSION['pending_user_email'] = $email;
+
+                        $emailResult = sendVerificationEmail($email, $code);
+
+                        if ($emailResult['success']) {
+                            header("Location: verify_code.php");
+                            exit();
+                        } else {
+                            $errorMessage = "Account created, but email failed: " . $emailResult['message'];
+                        }
+                    } else {
+                        $errorMessage = "Failed to create account.";
+                    }
+
+                    $insert->close();
+                }
             }
-
-            $stmt->close();
         }
-
-        $checkStmt->close();
     }
 }
 ?>
@@ -45,39 +117,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register</title>
 </head>
 <body>
-<div class="container">
+
     <h2>Create Account</h2>
 
-    <?php if (!empty($successMessage)): ?>
-        <div class="success"><?php echo htmlspecialchars($successMessage); ?></div>
-    <?php endif; ?>
-
     <?php if (!empty($errorMessage)): ?>
-        <div class="error"><?php echo htmlspecialchars($errorMessage); ?></div>
+        <p style="color:red;"><?php echo htmlspecialchars($errorMessage); ?></p>
     <?php endif; ?>
 
-    <form method="POST">
-        <label>Email</label>
-        <input type="email" name="email" required>
+    <?php if (!empty($successMessage)): ?>
+        <p style="color:green;"><?php echo htmlspecialchars($successMessage); ?></p>
+    <?php endif; ?>
 
-        <label>Password</label>
+    <form method="POST" action="">
+        <label>Email:</label><br>
+        <input type="email" name="email" required
+               value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>">
+        <br><br>
+
+        <label>Password:</label><br>
         <input type="password" name="password" required>
+        <br><br>
 
-        <label>Confirm Password</label>
+        <label>Confirm Password:</label><br>
         <input type="password" name="confirm_password" required>
+        <br><br>
 
-        <button type="submit" class="btn">Register</button>
+        <button type="submit">Register</button>
     </form>
 
-    <div class="link">
-        <a href="login.php">Already have an account? Log in</a>
-    </div>
-</div>
+    <br>
+    <a href="login.php">Back to Login</a>
+
 </body>
 </html>
-
-<?php $conn->close(); ?>

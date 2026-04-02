@@ -13,6 +13,10 @@ CREATE TABLE User (
     verification_expires DATETIME DEFAULT NULL,
     is_verified BOOLEAN DEFAULT FALSE,
 
+    -- 🔐 PASSWORD RESET FIELDS (NEW)
+    reset_code VARCHAR(6) DEFAULT NULL,
+    reset_expires DATETIME DEFAULT NULL,
+
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
