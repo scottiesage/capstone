@@ -93,85 +93,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="base.css">
     <title>Reset Password</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f6f9;
-            margin: 0;
-            padding: 0;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 420px;
-            margin: 80px auto;
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        h2 {
-            margin-top: 0;
-            text-align: center;
-        }
-
-        .message-error {
-            background: #fdeaea;
-            color: #b30000;
-            border: 1px solid #f5c2c2;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-
-        .message-success {
-            background: #eafaf0;
-            color: #1f7a3d;
-            border: 1px solid #bfe5c8;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-
-        label {
-            font-weight: bold;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        input[type="email"],
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 16px;
-            margin-bottom: 15px;
-        }
-
-        button {
-            width: 100%;
-            padding: 11px;
-            border: none;
-            border-radius: 6px;
-            background: #2c7be5;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        .back-link {
-            display: block;
-            text-align: center;
-            margin-top: 15px;
-            text-decoration: none;
-            color: #2c7be5;
-        }
-    </style>
 </head>
 <body>
 

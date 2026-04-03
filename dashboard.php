@@ -20,7 +20,7 @@ $duplicate_transactions = [];
 
 /*
 |--------------------------------------------------------------------------
-| Get account balances by type using TransactionLine
+| Get account balances by type
 |--------------------------------------------------------------------------
 */
 $sql = "
@@ -30,24 +30,22 @@ $sql = "
         a.account_type,
         COALESCE(SUM(
             CASE
-                WHEN tl.line_type = 'Debit' THEN
+                WHEN t.debit_account_id = a.account_id THEN
                     CASE
-                        WHEN a.account_type IN ('Asset', 'Expense') THEN tl.amount
-                        ELSE -tl.amount
+                        WHEN a.account_type IN ('Asset', 'Expense') THEN t.amount
+                        ELSE -t.amount
                     END
-                WHEN tl.line_type = 'Credit' THEN
+                WHEN t.credit_account_id = a.account_id THEN
                     CASE
-                        WHEN a.account_type IN ('Liability', 'Equity', 'Revenue') THEN tl.amount
-                        ELSE -tl.amount
+                        WHEN a.account_type IN ('Liability', 'Equity', 'Revenue') THEN t.amount
+                        ELSE -t.amount
                     END
                 ELSE 0
             END
         ), 0) AS balance
     FROM Account a
-    LEFT JOIN TransactionLine tl
-        ON a.account_id = tl.account_id
     LEFT JOIN `Transaction` t
-        ON tl.transaction_id = t.transaction_id
+        ON (t.debit_account_id = a.account_id OR t.credit_account_id = a.account_id)
         AND t.user_id = ?
     WHERE a.user_id = ?
     GROUP BY a.account_id, a.account_name, a.account_type
@@ -104,7 +102,9 @@ $countSql = "SELECT COUNT(*) AS total_transactions FROM `Transaction` WHERE user
 $countStmt = $conn->prepare($countSql);
 
 if (!$countStmt) {
-    $errorMessage = "Prepare failed (count): " . $conn->error;
+    if (empty($errorMessage)) {
+        $errorMessage = "Prepare failed (count): " . $conn->error;
+    }
 } else {
     $countStmt->bind_param("i", $user_id);
     $countStmt->execute();
@@ -120,8 +120,6 @@ if (!$countStmt) {
 /*
 |--------------------------------------------------------------------------
 | Detect large transactions
-|--------------------------------------------------------------------------
-| Rule: flag anything over 10000
 |--------------------------------------------------------------------------
 */
 $largeSql = "
@@ -157,8 +155,6 @@ if (!$largeStmt) {
 /*
 |--------------------------------------------------------------------------
 | Detect possible duplicate transactions
-|--------------------------------------------------------------------------
-| Rule: same date + same amount + same vendor_id for same user
 |--------------------------------------------------------------------------
 */
 $duplicateSql = "
@@ -222,149 +218,148 @@ if (count($duplicate_transactions) > 0) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Accounting Dashboard</title>
+    <link rel="stylesheet" href="base.css">
 </head>
 <body>
 
-<h2>Accounting Dashboard</h2>
+<?php include 'navbar.php'; ?>
 
-<p>
-    <a href="transaction.php">View Transactions</a> |
-    <a href="transaction_entry.php">Add Transaction</a> |
-    <a href="balancesheetgen.php">Balance Sheet</a> |
-    <a href="incomestatement.php">Income Statement</a> |
-    <a href="logout.php">Logout</a>
-</p>
+<div class="main-content">
+    <h1>Accounting Dashboard</h1>
 
-<?php if (!empty($errorMessage)) : ?>
-    <p style="color: red;"><?php echo htmlspecialchars($errorMessage); ?></p>
-<?php else : ?>
-
-    <h3>Financial Summary</h3>
-    <table border="1" cellpadding="8" cellspacing="0">
-        <tr>
-            <th>Metric</th>
-            <th>Amount</th>
-        </tr>
-        <tr>
-            <td>Total Assets</td>
-            <td>$<?php echo number_format($total_assets, 2); ?></td>
-        </tr>
-        <tr>
-            <td>Total Liabilities</td>
-            <td>$<?php echo number_format($total_liabilities, 2); ?></td>
-        </tr>
-        <tr>
-            <td>Total Equity</td>
-            <td>$<?php echo number_format($total_equity, 2); ?></td>
-        </tr>
-        <tr>
-            <td>Total Revenue</td>
-            <td>$<?php echo number_format($total_revenue, 2); ?></td>
-        </tr>
-        <tr>
-            <td>Total Expenses</td>
-            <td>$<?php echo number_format($total_expenses, 2); ?></td>
-        </tr>
-        <tr>
-            <td>Net Income</td>
-            <td>
-                <?php
-                if ($net_income >= 0) {
-                    echo '$' . number_format($net_income, 2);
-                } else {
-                    echo '-$' . number_format(abs($net_income), 2);
-                }
-                ?>
-            </td>
-        </tr>
-        <tr>
-            <td>Total Transactions</td>
-            <td><?php echo $total_transactions; ?></td>
-        </tr>
-    </table>
-
-    <br>
-
-    <h3>System Status</h3>
-    <?php if ($is_balanced): ?>
-        <p style="color: green;"><strong>Balance Sheet Status:</strong> Balanced</p>
-    <?php else: ?>
-        <p style="color: red;">
-            <strong>Balance Sheet Status:</strong> Not Balanced
-            (Difference: $<?php echo number_format(abs($balance_check), 2); ?>)
+    <?php if (!empty($errorMessage)) : ?>
+        <p style="color: red; font-weight: bold;">
+            <?php echo htmlspecialchars($errorMessage); ?>
         </p>
-    <?php endif; ?>
+    <?php else : ?>
 
-    <br>
-
-    <h3>Fraud / Error Detection Alerts</h3>
-    <?php if (count($alerts) > 0): ?>
-        <ul>
-            <?php foreach ($alerts as $alert): ?>
-                <li style="color: red;"><?php echo htmlspecialchars($alert); ?></li>
-            <?php endforeach; ?>
-        </ul>
-    <?php else: ?>
-        <p style="color: green;">No fraud or error alerts detected.</p>
-    <?php endif; ?>
-
-    <br>
-
-    <h3>Large Transactions</h3>
-    <?php if (count($large_transactions) > 0): ?>
-        <table border="1" cellpadding="8" cellspacing="0">
+        <h2>Financial Summary</h2>
+        <table>
             <tr>
-                <th>Transaction ID</th>
-                <th>Date</th>
+                <th>Metric</th>
                 <th>Amount</th>
-                <th>Description</th>
             </tr>
-            <?php foreach ($large_transactions as $transaction): ?>
-                <tr>
-                    <td><?php echo (int)$transaction['transaction_id']; ?></td>
-                    <td><?php echo htmlspecialchars($transaction['transaction_date']); ?></td>
-                    <td>$<?php echo number_format((float)$transaction['amount'], 2); ?></td>
-                    <td><?php echo htmlspecialchars($transaction['description'] ?? ''); ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
-    <?php else: ?>
-        <p>No large transactions detected.</p>
-    <?php endif; ?>
-
-    <br>
-
-    <h3>Possible Duplicate Transactions</h3>
-    <?php if (count($duplicate_transactions) > 0): ?>
-        <table border="1" cellpadding="8" cellspacing="0">
             <tr>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Vendor</th>
-                <th>Duplicate Count</th>
+                <td>Total Assets</td>
+                <td>$<?php echo number_format($total_assets, 2); ?></td>
             </tr>
-            <?php foreach ($duplicate_transactions as $duplicate): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($duplicate['transaction_date']); ?></td>
-                    <td>$<?php echo number_format((float)$duplicate['amount'], 2); ?></td>
-                    <td><?php echo htmlspecialchars($duplicate['vendor_name'] ?? ('Vendor ID ' . ($duplicate['vendor_id'] ?? 'None'))); ?></td>
-                    <td><?php echo (int)$duplicate['duplicate_count']; ?></td>
-                </tr>
-            <?php endforeach; ?>
+            <tr>
+                <td>Total Liabilities</td>
+                <td>$<?php echo number_format($total_liabilities, 2); ?></td>
+            </tr>
+            <tr>
+                <td>Total Equity</td>
+                <td>$<?php echo number_format($total_equity, 2); ?></td>
+            </tr>
+            <tr>
+                <td>Total Revenue</td>
+                <td>$<?php echo number_format($total_revenue, 2); ?></td>
+            </tr>
+            <tr>
+                <td>Total Expenses</td>
+                <td>$<?php echo number_format($total_expenses, 2); ?></td>
+            </tr>
+            <tr>
+                <td>Net Income</td>
+                <td>
+                    <?php
+                    if ($net_income >= 0) {
+                        echo '$' . number_format($net_income, 2);
+                    } else {
+                        echo '-$' . number_format(abs($net_income), 2);
+                    }
+                    ?>
+                </td>
+            </tr>
+            <tr>
+                <td>Total Transactions</td>
+                <td><?php echo $total_transactions; ?></td>
+            </tr>
         </table>
-    <?php else: ?>
-        <p>No duplicate transaction patterns detected.</p>
+
+        <h2 style="margin-top: 30px;">System Status</h2>
+        <?php if ($is_balanced): ?>
+            <p style="color: green; font-weight: bold;">
+                Balance Sheet Status: Balanced
+            </p>
+        <?php else: ?>
+            <p style="color: red; font-weight: bold;">
+                Balance Sheet Status: Not Balanced
+                (Difference: $<?php echo number_format(abs($balance_check), 2); ?>)
+            </p>
+        <?php endif; ?>
+
+        <h2 style="margin-top: 30px;">Fraud / Error Detection Alerts</h2>
+        <?php if (count($alerts) > 0): ?>
+            <ul>
+                <?php foreach ($alerts as $alert): ?>
+                    <li style="color: red;">
+                        <?php echo htmlspecialchars($alert); ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php else: ?>
+            <p style="color: green;">No fraud or error alerts detected.</p>
+        <?php endif; ?>
+
+        <h2 style="margin-top: 30px;">Large Transactions</h2>
+        <?php if (count($large_transactions) > 0): ?>
+            <table>
+                <tr>
+                    <th>Transaction ID</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Description</th>
+                </tr>
+                <?php foreach ($large_transactions as $transaction): ?>
+                    <tr>
+                        <td><?php echo (int)$transaction['transaction_id']; ?></td>
+                        <td><?php echo htmlspecialchars($transaction['transaction_date']); ?></td>
+                        <td>$<?php echo number_format((float)$transaction['amount'], 2); ?></td>
+                        <td><?php echo htmlspecialchars($transaction['description'] ?? ''); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        <?php else: ?>
+            <p>No large transactions detected.</p>
+        <?php endif; ?>
+
+        <h2 style="margin-top: 30px;">Possible Duplicate Transactions</h2>
+        <?php if (count($duplicate_transactions) > 0): ?>
+            <table>
+                <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Vendor</th>
+                    <th>Duplicate Count</th>
+                </tr>
+                <?php foreach ($duplicate_transactions as $duplicate): ?>
+                    <tr>
+                        <td><?php echo htmlspecialchars($duplicate['transaction_date']); ?></td>
+                        <td>$<?php echo number_format((float)$duplicate['amount'], 2); ?></td>
+                        <td>
+                            <?php
+                            echo htmlspecialchars(
+                                $duplicate['vendor_name'] ?? ('Vendor ID ' . ($duplicate['vendor_id'] ?? 'None'))
+                            );
+                            ?>
+                        </td>
+                        <td><?php echo (int)$duplicate['duplicate_count']; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        <?php else: ?>
+            <p>No duplicate transaction patterns detected.</p>
+        <?php endif; ?>
+
+        <h2 style="margin-top: 30px;">Quick Actions</h2>
+        <p><a href="transactionentry.php">Enter New Transaction</a></p>
+        <p><a href="transactions.php">Review All Transactions</a></p>
+        <p><a href="balancesheetgen.php">Open Balance Sheet</a></p>
+        <p><a href="incomestatement.php">Open Income Statement</a></p>
+
     <?php endif; ?>
-
-    <br>
-
-    <h3>Quick Actions</h3>
-    <p><a href="transaction_entry.php">Enter New Transaction</a></p>
-    <p><a href="transaction.php">Review All Transactions</a></p>
-    <p><a href="balancesheetgen.php">Open Balance Sheet</a></p>
-    <p><a href="incomestatement.php">Open Income Statement</a></p>
-
-<?php endif; ?>
+</div>
 
 </body>
 </html>

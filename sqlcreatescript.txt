@@ -1,106 +1,167 @@
+-- =========================
+-- RESET DATABASE
+-- =========================
 DROP DATABASE IF EXISTS capstone;
 CREATE DATABASE capstone;
 USE capstone;
 
+-- =========================
 -- USER TABLE
+-- =========================
 CREATE TABLE User (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
 
-    -- 2FA FIELDS
+    -- 2FA
     verification_code VARCHAR(10) DEFAULT NULL,
     verification_expires DATETIME DEFAULT NULL,
     is_verified BOOLEAN DEFAULT FALSE,
 
-    -- 🔐 PASSWORD RESET FIELDS (NEW)
+    -- PASSWORD RESET
     reset_code VARCHAR(6) DEFAULT NULL,
     reset_expires DATETIME DEFAULT NULL,
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- =========================
 -- ACCOUNT TABLE
+-- Added:
+-- - account_code
+-- - unique account name per user
+-- =========================
 CREATE TABLE Account (
     account_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
+    account_code VARCHAR(20) DEFAULT NULL,
     account_name VARCHAR(120) NOT NULL,
-    account_type ENUM('Asset','Liability','Equity','Revenue','Expense'),
+    account_type ENUM('Asset','Liability','Equity','Revenue','Expense') NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE
-);
 
--- VENDOR TABLE
-CREATE TABLE Vendor (
-    vendor_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    vendor_name VARCHAR(120),
-    email VARCHAR(120),
-    phone VARCHAR(50),
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE
-);
+    CONSTRAINT fk_account_user
+        FOREIGN KEY (user_id) REFERENCES User(user_id)
+        ON DELETE CASCADE,
 
--- TRANSACTION TABLE
-CREATE TABLE `Transaction` (
-    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    vendor_id INT,
-    customer_name VARCHAR(120),
-    transaction_type ENUM('Sale','Purchase','Payment','Receipt'),
-    transaction_date DATE,
-    amount DECIMAL(10,2),
-    description VARCHAR(255),
-    memo VARCHAR(255),
-    category VARCHAR(100),
-    source VARCHAR(50),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (vendor_id) REFERENCES Vendor(vendor_id) ON DELETE SET NULL
-);
-
--- TRANSACTION LINE TABLE
-CREATE TABLE TransactionLine (
-    transaction_line_id INT AUTO_INCREMENT PRIMARY KEY,
-    transaction_id INT NOT NULL,
-    account_id INT NOT NULL,
-    line_type ENUM('Debit','Credit'),
-    amount DECIMAL(10,2),
-    memo VARCHAR(255),
-    FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id) ON DELETE CASCADE,
-    FOREIGN KEY (account_id) REFERENCES Account(account_id) ON DELETE CASCADE
-);
-
--- DETECTION RULE TABLE
-CREATE TABLE DetectionRule (
-    rule_id INT AUTO_INCREMENT PRIMARY KEY,
-    rule_name VARCHAR(120),
-    rule_category ENUM('Error','Fraud'),
-    severity ENUM('Low','Medium','High'),
-    is_active BOOLEAN DEFAULT TRUE
-);
-
--- ALERT TABLE
-CREATE TABLE Alert (
-    alert_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    rule_id INT,
-    transaction_id INT,
-    status ENUM('Open','Reviewed','Resolved') DEFAULT 'Open',
-    message VARCHAR(255),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES User(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (rule_id) REFERENCES DetectionRule(rule_id) ON DELETE SET NULL,
-    FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id) ON DELETE SET NULL
+    CONSTRAINT unique_user_account
+        UNIQUE (user_id, account_name)
 );
 
 -- =========================
--- 👤 SAMPLE USERS
--- Password for both: password123
--- (Generate your own hash with PHP if needed)
+-- VENDOR TABLE
+-- Updated:
+-- - vendor_name now required
+-- - added address and notes fields
+-- - unique vendor name per user
+-- =========================
+CREATE TABLE Vendor (
+    vendor_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    vendor_name VARCHAR(120) NOT NULL,
+    email VARCHAR(120) DEFAULT NULL,
+    phone VARCHAR(50) DEFAULT NULL,
+    address_line1 VARCHAR(150) DEFAULT NULL,
+    city VARCHAR(100) DEFAULT NULL,
+    state VARCHAR(50) DEFAULT NULL,
+    zip_code VARCHAR(20) DEFAULT NULL,
+    notes VARCHAR(255) DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_vendor_user
+        FOREIGN KEY (user_id) REFERENCES User(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT unique_user_vendor
+        UNIQUE (user_id, vendor_name)
+);
+
+-- =========================
+-- TRANSACTION TABLE
+-- Double-entry accounting:
+-- every transaction requires a debit and credit account
+-- =========================
+CREATE TABLE `Transaction` (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    vendor_id INT DEFAULT NULL,
+    customer_name VARCHAR(120) DEFAULT NULL,
+
+    transaction_type ENUM('Sale','Purchase','Payment','Receipt') NOT NULL,
+    transaction_date DATE NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+
+    debit_account_id INT NOT NULL,
+    credit_account_id INT NOT NULL,
+
+    description VARCHAR(255) DEFAULT NULL,
+    memo VARCHAR(255) DEFAULT NULL,
+    category VARCHAR(100) DEFAULT NULL,
+    source VARCHAR(50) DEFAULT NULL,
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_transaction_user
+        FOREIGN KEY (user_id) REFERENCES User(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_transaction_vendor
+        FOREIGN KEY (vendor_id) REFERENCES Vendor(vendor_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_transaction_debit_account
+        FOREIGN KEY (debit_account_id) REFERENCES Account(account_id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_transaction_credit_account
+        FOREIGN KEY (credit_account_id) REFERENCES Account(account_id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_different_accounts
+        CHECK (debit_account_id <> credit_account_id)
+);
+
+-- =========================
+-- DETECTION RULE TABLE
+-- =========================
+CREATE TABLE DetectionRule (
+    rule_id INT AUTO_INCREMENT PRIMARY KEY,
+    rule_name VARCHAR(120) NOT NULL,
+    rule_category ENUM('Error','Fraud') NOT NULL,
+    severity ENUM('Low','Medium','High') NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- =========================
+-- ALERT TABLE
+-- =========================
+CREATE TABLE Alert (
+    alert_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    rule_id INT DEFAULT NULL,
+    transaction_id INT DEFAULT NULL,
+    status ENUM('Open','Reviewed','Resolved') DEFAULT 'Open',
+    message VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME DEFAULT NULL,
+
+    CONSTRAINT fk_alert_user
+        FOREIGN KEY (user_id) REFERENCES User(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_alert_rule
+        FOREIGN KEY (rule_id) REFERENCES DetectionRule(rule_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_alert_transaction
+        FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id)
+        ON DELETE SET NULL
+);
+
+-- =========================
+-- SAMPLE USERS
+-- Password: password123
 -- =========================
 INSERT INTO User (email, password_hash)
 VALUES
@@ -108,77 +169,71 @@ VALUES
 ('demo@example.com', '$2y$10$zG2BDB8Lazc.Vqi4DhnN8Ogjvx5FTX3rljXHsPujuVBCnzAylaegy');
 
 -- =========================
--- 🏦 SAMPLE ACCOUNTS
+-- SAMPLE ACCOUNTS
+-- Added account_code values
 -- =========================
-INSERT INTO Account (user_id, account_name, account_type)
+INSERT INTO Account (user_id, account_code, account_name, account_type)
 VALUES
-(1, 'Cash', 'Asset'),
-(1, 'Accounts Receivable', 'Asset'),
-(1, 'Accounts Payable', 'Liability'),
-(1, 'Owner Equity', 'Equity'),
-(1, 'Sales Revenue', 'Revenue'),
-(1, 'Office Supplies Expense', 'Expense');
+(1, '1000', 'Cash', 'Asset'),
+(1, '1100', 'Accounts Receivable', 'Asset'),
+(1, '2000', 'Accounts Payable', 'Liability'),
+(1, '3000', 'Owner Equity', 'Equity'),
+(1, '4000', 'Sales Revenue', 'Revenue'),
+(1, '5000', 'Office Supplies Expense', 'Expense'),
+(1, '1500', 'Equipment', 'Asset');
 
 -- =========================
--- 🧾 SAMPLE VENDORS
+-- SAMPLE VENDORS
+-- Added address/notes fields
 -- =========================
-INSERT INTO Vendor (user_id, vendor_name, email, phone)
+INSERT INTO Vendor (
+    user_id, vendor_name, email, phone,
+    address_line1, city, state, zip_code, notes
+)
 VALUES
-(1, 'Amazon', 'support@amazon.com', '800-123-4567'),
-(1, 'Staples', 'support@staples.com', '800-222-3333'),
-(1, 'Client A', 'clienta@email.com', '757-555-1111');
+(1, 'Amazon', 'support@amazon.com', '800-123-4567',
+ '410 Terry Ave N', 'Seattle', 'WA', '98109', 'Online vendor'),
+(1, 'Staples', 'support@staples.com', '800-222-3333',
+ '500 Staples Drive', 'Framingham', 'MA', '01702', 'Office supply vendor'),
+(1, 'Client A', 'clienta@email.com', '757-555-1111',
+ '123 Client Lane', 'Norfolk', 'VA', '23510', 'Consulting client');
 
 -- =========================
--- 💳 SAMPLE TRANSACTIONS
+-- SAMPLE TRANSACTIONS
 -- =========================
 INSERT INTO `Transaction`
-(user_id, vendor_id, customer_name, transaction_type, transaction_date, amount, description, category, source)
+(
+    user_id, vendor_id, customer_name, transaction_type, transaction_date, amount,
+    debit_account_id, credit_account_id, description, memo, category, source
+)
 VALUES
-(1, 1, NULL, 'Purchase', '2026-03-01', 150.00, 'Office supplies purchase', 'Supplies', 'Manual'),
-(1, 2, NULL, 'Purchase', '2026-03-02', 200.00, 'Printer purchase', 'Equipment', 'Manual'),
-(1, 3, 'Client A', 'Sale', '2026-03-03', 500.00, 'Consulting revenue', 'Income', 'Manual'),
+-- Office supplies purchase
+(1, 1, NULL, 'Purchase', '2026-03-01', 150.00,
+ 6, 1, 'Office supplies purchase', '', 'Supplies', 'Manual'),
 
--- Duplicate-style transaction (for fraud detection testing)
-(1, 1, NULL, 'Purchase', '2026-03-01', 150.00, 'Duplicate office supplies', 'Supplies', 'Manual');
+-- Equipment purchase
+(1, 2, NULL, 'Purchase', '2026-03-02', 200.00,
+ 7, 1, 'Printer purchase', '', 'Equipment', 'Manual'),
+
+-- Consulting revenue
+(1, 3, 'Client A', 'Sale', '2026-03-03', 500.00,
+ 1, 5, 'Consulting revenue', '', 'Income', 'Manual'),
+
+-- Duplicate-style transaction for testing
+(1, 1, NULL, 'Purchase', '2026-03-01', 150.00,
+ 6, 1, 'Duplicate office supplies', '', 'Supplies', 'Manual');
 
 -- =========================
--- 🔁 TRANSACTION LINES (DEBIT/CREDIT)
+-- DETECTION RULES
 -- =========================
--- Transaction 1
-INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
+INSERT INTO DetectionRule (rule_name, rule_category, severity, is_active)
 VALUES
-(1, 6, 'Debit', 150.00),   -- Expense
-(1, 1, 'Credit', 150.00);  -- Cash
-
--- Transaction 2
-INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
-VALUES
-(2, 6, 'Debit', 200.00),
-(2, 1, 'Credit', 200.00);
-
--- Transaction 3 (Revenue)
-INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
-VALUES
-(3, 1, 'Debit', 500.00),   -- Cash
-(3, 5, 'Credit', 500.00);  -- Revenue
-
--- Transaction 4 (Duplicate test)
-INSERT INTO TransactionLine (transaction_id, account_id, line_type, amount)
-VALUES
-(4, 6, 'Debit', 150.00),
-(4, 1, 'Credit', 150.00);
+('Duplicate Transaction', 'Error', 'High', TRUE),
+('Unusual Amount', 'Fraud', 'Medium', TRUE),
+('High Frequency Vendor Usage', 'Fraud', 'Medium', TRUE);
 
 -- =========================
--- 🚨 DETECTION RULES
--- =========================
-INSERT INTO DetectionRule (rule_name, rule_category, severity)
-VALUES
-('Duplicate Transaction', 'Error', 'High'),
-('Unusual Amount', 'Fraud', 'Medium'),
-('High Frequency Vendor Usage', 'Fraud', 'Medium');
-
--- =========================
--- ⚠️ SAMPLE ALERTS
+-- SAMPLE ALERTS
 -- =========================
 INSERT INTO Alert (user_id, rule_id, transaction_id, status, message)
 VALUES

@@ -116,6 +116,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="stylesheet" href="base.css">
     <meta charset="UTF-8">
     <title>Register</title>
 </head>
