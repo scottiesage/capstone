@@ -173,3 +173,65 @@ textarea {
 .btn:hover {
     background-color: #1d4ed8;
 }
+/* =========================
+   AUTH PAGE (LOGIN ONLY)
+   ========================= */
+
+/* Center the login page */
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+/* Login container */
+.auth-box {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    padding: 32px;
+}
+
+/* Title + subtitle */
+.auth-box h1 {
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.auth-box p {
+    text-align: center;
+    margin-bottom: 24px;
+    color: #6b7280;
+}
+
+/* 🔥 IMPORTANT: Override your global form styling ONLY here */
+.auth-box form {
+    background: transparent !important;
+    padding: 0 !important;
+    max-width: none !important;
+}
+
+/* Inputs */
+.auth-box input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    box-sizing: border-box;
+}
+
+/* Button */
+.auth-box .btn {
+    width: 100%;
+    padding: 12px;
+}
+
+/* Links */
+.auth-box a {
+    font-size: 14px;
+}

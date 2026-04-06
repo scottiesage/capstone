@@ -76,42 +76,36 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 </head>
 <body>
 
-<div class="container">
-    <h2>Login</h2>
+<div class="auth-page">
 
-    <?php if (!empty($errorMessage)): ?>
-        <div class="message-error"><?php echo htmlspecialchars($errorMessage); ?></div>
-    <?php endif; ?>
+    <div class="auth-box">
 
-    <?php if (!empty($successMessage)): ?>
-        <div class="message-success"><?php echo htmlspecialchars($successMessage); ?></div>
-    <?php endif; ?>
+        <h1 class="text-center">Secure Ledger</h1>
+        <p class="text-center">Login to your account</p>
 
-    <form method="POST" action="">
-        <label for="email">Email</label>
-        <input
-            type="email"
-            id="email"
-            name="email"
-            value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>"
-            required
-        >
+        <form method="POST" action="login.php">
 
-        <label for="password">Password</label>
-        <input
-            type="password"
-            id="password"
-            name="password"
-            required
-        >
+            <div>
+                <label>Email</label>
+                <input type="email" name="email" required>
+            </div>
 
-        <button type="submit">Login</button>
-    </form>
+            <div>
+                <label>Password</label>
+                <input type="password" name="password" required>
+            </div>
 
-    <div style="text-align:center; margin-top:15px;">
-    <a class="register-link" href="forgot_password.php">Forgot Password?</a>
-    <a class="register-link" href="register.php">Create Account</a>
+            <button class="btn btn-primary btn-full">Login</button>
+
+        </form>
+
+        <div class="mt-3 text-center">
+            <a href="forgot_password.php">Forgot Password?</a> |
+            <a href="register.php">Create Account</a>
+        </div>
+
     </div>
+
 </div>
 
 </body>
