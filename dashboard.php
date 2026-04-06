@@ -363,15 +363,6 @@ if (count($duplicate_transactions) > 0) {
                 <p style="margin: 0;">No duplicate transaction patterns detected.</p>
             <?php endif; ?>
         </div>
-
-        <div class="card">
-            <h2>Quick Actions</h2>
-            <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-                <a href="transactionentry.php" class="btn btn-primary">Enter New Transaction</a>
-                <a href="transactions.php" class="btn btn-primary">Review All Transactions</a>
-                <a href="balancesheetgen.php" class="btn btn-primary">Open Balance Sheet</a>
-                <a href="incomestatement.php" class="btn btn-primary">Open Income Statement</a>
-            </div>
         </div>
 
     <?php endif; ?>
