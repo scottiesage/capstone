@@ -97,8 +97,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         |--------------------------------------------------------------------------
         | Duplicate check
         |--------------------------------------------------------------------------
-        | Duplicate = same user + same date + same amount + same vendor_id
-        |--------------------------------------------------------------------------
         */
         if (!$force_insert) {
             $duplicateStmt = null;
@@ -179,7 +177,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         /*
         |--------------------------------------------------------------------------
-        | Insert only if no duplicate warning is being shown
+        | Insert transaction
         |--------------------------------------------------------------------------
         */
         if (empty($errorMessage) && !$showDuplicateWarning) {
@@ -220,7 +218,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 );
 
                 if ($stmt->execute()) {
-                    header("Location: transaction.php");
+                    header("Location: transactions.php");
                     exit();
                 } else {
                     $errorMessage = "Error adding transaction: " . $stmt->error;
@@ -245,143 +243,137 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 </head>
 <body>
 
-<h2>Transaction Entry</h2>
+<?php include 'navbar.php'; ?>
 
-<p>
-    <a href="transaction.php">Back to Transactions</a> |
-    <a href="dashboard.php">Dashboard</a> |
-    <a href="logout.php">Logout</a>
-</p>
+<div class="main-content">
+    <h1 class="page-title">Transaction Entry</h1>
 
-<?php if (!empty($errorMessage)) : ?>
-    <p style="color:red;"><strong><?php echo htmlspecialchars($errorMessage); ?></strong></p>
-<?php endif; ?>
+    <?php if (!empty($errorMessage)) : ?>
+        <div class="card" style="max-width: 700px;">
+            <p style="color:red; font-weight:bold; margin:0;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        </div>
+    <?php endif; ?>
 
-<form method="POST" action="">
-    <input type="hidden" name="force_insert" id="force_insert" value="0">
+    <div class="card form-card">
+        <form method="POST" action="">
+            <input type="hidden" name="force_insert" id="force_insert" value="0">
 
-    <label for="transaction_type">Transaction Type</label><br>
-    <select name="transaction_type" id="transaction_type" required>
-        <option value="">-- Select Type --</option>
-        <?php foreach ($allowed_types as $type): ?>
-            <option value="<?php echo htmlspecialchars($type); ?>" <?php echo ($transaction_type === $type) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($type); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-    <br><br>
+            <label for="transaction_type">Transaction Type</label>
+            <select name="transaction_type" id="transaction_type" required>
+                <option value="">-- Select Type --</option>
+                <?php foreach ($allowed_types as $type): ?>
+                    <option value="<?php echo htmlspecialchars($type); ?>" <?php echo ($transaction_type === $type) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($type); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
 
-    <label for="transaction_date">Date</label><br>
-    <input
-        type="date"
-        name="transaction_date"
-        id="transaction_date"
-        value="<?php echo htmlspecialchars($transaction_date); ?>"
-        required
-    >
-    <br><br>
+            <label for="transaction_date">Date</label>
+            <input
+                type="date"
+                name="transaction_date"
+                id="transaction_date"
+                value="<?php echo htmlspecialchars($transaction_date); ?>"
+                required
+            >
 
-    <label for="amount">Amount</label><br>
-    <input
-        type="number"
-        step="0.01"
-        min="0.01"
-        name="amount"
-        id="amount"
-        value="<?php echo htmlspecialchars($amount); ?>"
-        required
-    >
-    <br><br>
+            <label for="amount">Amount</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                name="amount"
+                id="amount"
+                value="<?php echo htmlspecialchars($amount); ?>"
+                required
+            >
 
-    <label for="customer_name">Customer</label><br>
-    <input
-        type="text"
-        name="customer_name"
-        id="customer_name"
-        value="<?php echo htmlspecialchars($customer_name); ?>"
-    >
-    <br><br>
+            <label for="customer_name">Customer</label>
+            <input
+                type="text"
+                name="customer_name"
+                id="customer_name"
+                value="<?php echo htmlspecialchars($customer_name); ?>"
+            >
 
-    <label for="vendor_id">Vendor</label><br>
-    <select name="vendor_id" id="vendor_id">
-        <option value="">-- No Vendor --</option>
-        <?php
-        if ($vendorResult && $vendorResult->num_rows > 0) {
-            while ($vendor = $vendorResult->fetch_assoc()) {
-                $selected = ($vendor_id !== null && $vendor_id !== '' && (int)$vendor_id === (int)$vendor['vendor_id']) ? 'selected' : '';
-                echo "<option value='" . htmlspecialchars($vendor['vendor_id']) . "' $selected>" .
-                     htmlspecialchars($vendor['vendor_name']) .
-                     "</option>";
-            }
-        }
-        ?>
-    </select>
-    <br><br>
+            <label for="vendor_id">Vendor</label>
+            <select name="vendor_id" id="vendor_id">
+                <option value="">-- No Vendor --</option>
+                <?php
+                if ($vendorResult && $vendorResult->num_rows > 0) {
+                    while ($vendor = $vendorResult->fetch_assoc()) {
+                        $selected = ($vendor_id !== null && $vendor_id !== '' && (int)$vendor_id === (int)$vendor['vendor_id']) ? 'selected' : '';
+                        echo "<option value='" . htmlspecialchars($vendor['vendor_id']) . "' $selected>" .
+                             htmlspecialchars($vendor['vendor_name']) .
+                             "</option>";
+                    }
+                }
+                ?>
+            </select>
 
-    <label for="debit_account_id">Debit Account</label><br>
-    <select name="debit_account_id" id="debit_account_id" required>
-        <option value="">-- Select Debit Account --</option>
-        <?php foreach ($accounts as $account): ?>
-            <option value="<?php echo (int)$account['account_id']; ?>" <?php echo ((int)$debit_account_id === (int)$account['account_id']) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($account['account_name'] . ' (' . $account['account_type'] . ')'); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-    <br><br>
+            <label for="debit_account_id">Debit Account</label>
+            <select name="debit_account_id" id="debit_account_id" required>
+                <option value="">-- Select Debit Account --</option>
+                <?php foreach ($accounts as $account): ?>
+                    <option value="<?php echo (int)$account['account_id']; ?>" <?php echo ((int)$debit_account_id === (int)$account['account_id']) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($account['account_name'] . ' (' . $account['account_type'] . ')'); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
 
-    <label for="credit_account_id">Credit Account</label><br>
-    <select name="credit_account_id" id="credit_account_id" required>
-        <option value="">-- Select Credit Account --</option>
-        <?php foreach ($accounts as $account): ?>
-            <option value="<?php echo (int)$account['account_id']; ?>" <?php echo ((int)$credit_account_id === (int)$account['account_id']) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($account['account_name'] . ' (' . $account['account_type'] . ')'); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-    <br><br>
+            <label for="credit_account_id">Credit Account</label>
+            <select name="credit_account_id" id="credit_account_id" required>
+                <option value="">-- Select Credit Account --</option>
+                <?php foreach ($accounts as $account): ?>
+                    <option value="<?php echo (int)$account['account_id']; ?>" <?php echo ((int)$credit_account_id === (int)$account['account_id']) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($account['account_name'] . ' (' . $account['account_type'] . ')'); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
 
-    <label for="description">Description</label><br>
-    <input
-        type="text"
-        name="description"
-        id="description"
-        value="<?php echo htmlspecialchars($description); ?>"
-    >
-    <br><br>
+            <label for="description">Description</label>
+            <input
+                type="text"
+                name="description"
+                id="description"
+                value="<?php echo htmlspecialchars($description); ?>"
+            >
 
-    <label for="memo">Memo</label><br>
-    <textarea name="memo" id="memo"><?php echo htmlspecialchars($memo); ?></textarea>
-    <br><br>
+            <label for="memo">Memo</label>
+            <textarea name="memo" id="memo"><?php echo htmlspecialchars($memo); ?></textarea>
 
-    <label for="category">Category</label><br>
-    <input
-        type="text"
-        name="category"
-        id="category"
-        value="<?php echo htmlspecialchars($category); ?>"
-    >
-    <br><br>
+            <label for="category">Category</label>
+            <input
+                type="text"
+                name="category"
+                id="category"
+                value="<?php echo htmlspecialchars($category); ?>"
+            >
 
-    <label for="source">Source</label><br>
-    <input
-        type="text"
-        name="source"
-        id="source"
-        value="<?php echo htmlspecialchars($source); ?>"
-    >
-    <br><br>
+            <label for="source">Source</label>
+            <input
+                type="text"
+                name="source"
+                id="source"
+                value="<?php echo htmlspecialchars($source); ?>"
+            >
 
-    <button type="submit">Save Transaction</button>
-</form>
+            <div style="display:flex; gap:12px; margin-top:20px; flex-wrap: wrap;">
+                <button type="submit" class="btn btn-primary">Save Transaction</button>
+                <a href="transactions.php" class="btn">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
 
 <?php if ($showDuplicateWarning): ?>
     <div style="
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
         z-index: 9999;
     ">
         <div style="
@@ -389,26 +381,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            width: 500px;
+            max-width: calc(100% - 32px);
             background: white;
-            padding: 30px;
-            border-radius: 8px;
-            text-align: center;
-            width: 460px;
-            box-shadow: 0 0 12px rgba(0,0,0,0.25);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
         ">
-            <h3 style="color:red; margin-top:0;">Duplicate Transaction Warning</h3>
-            <p>A transaction with the same date, amount, and vendor already exists.</p>
+            <h2 style="margin-top:0; color:#dc2626;">Duplicate Transaction</h2>
+            <p style="color:#475569;">
+                A similar transaction already exists.
+            </p>
 
             <?php if ($duplicateTransaction): ?>
                 <div style="
-                    margin: 15px 0;
-                    padding: 12px;
-                    border: 1px solid #ccc;
-                    border-radius: 6px;
-                    background: #f9f9f9;
-                    text-align: left;
+                    background:#f8fafc;
+                    padding:16px;
+                    border-radius:10px;
+                    margin:15px 0;
                 ">
-                    <p><strong>Existing Transaction ID:</strong> <?php echo (int)$duplicateTransaction['transaction_id']; ?></p>
+                    <p><strong>ID:</strong> <?php echo (int)$duplicateTransaction['transaction_id']; ?></p>
                     <p><strong>Date:</strong> <?php echo htmlspecialchars($duplicateTransaction['transaction_date']); ?></p>
                     <p><strong>Amount:</strong> $<?php echo number_format((float)$duplicateTransaction['amount'], 2); ?></p>
                     <p><strong>Vendor:</strong> <?php echo htmlspecialchars($duplicateTransaction['vendor_name'] ?? 'No Vendor'); ?></p>
@@ -416,15 +408,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </div>
             <?php endif; ?>
 
-            <p>Do you want to proceed anyway?</p>
-
-            <button type="button" onclick="proceedInsert()" style="margin-right: 10px;">
-                Proceed
-            </button>
-
-            <button type="button" onclick="closeWarning()">
-                Cancel
-            </button>
+            <div style="display:flex; gap:10px; margin-top:20px; flex-wrap: wrap;">
+                <button type="button" onclick="proceedInsert()" class="btn btn-primary">Proceed Anyway</button>
+                <button type="button" onclick="closeWarning()" class="btn">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -435,7 +422,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         function closeWarning() {
-            window.location.href = 'transaction_entry.php';
+            window.location.href = 'transactionentry.php';
         }
     </script>
 <?php endif; ?>

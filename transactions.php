@@ -52,65 +52,81 @@ if (!$stmt) {
 </head>
 <body>
 
-<h2>Transactions</h2>
+<?php include 'navbar.php'; ?>
 
-<p>
-    <a href="dashboard.php">Back to Dashboard</a> |
-    <a href="transaction_entry.php">Add Transaction</a> |
-    <a href="balancesheetgen.php">View Balance Sheet</a> |
-    <a href="incomestatement.php">View Income Statement</a> |
-    <a href="logout.php">Logout</a>
-</p>
+<div class="main-content">
+    <h1 class="page-title">Transactions</h1>
 
-<?php if (!empty($errorMessage)) : ?>
-    <p style="color:red;"><?php echo htmlspecialchars($errorMessage); ?></p>
-<?php else : ?>
-
-    <?php if ($transactions && $transactions->num_rows > 0) : ?>
-        <table border="1" cellpadding="8" cellspacing="0">
-            <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Customer</th>
-                <th>Vendor</th>
-                <th>Debit Account</th>
-                <th>Credit Account</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th>Source</th>
-                <th>Memo</th>
-                <th>Actions</th>
-            </tr>
-
-            <?php while ($row = $transactions->fetch_assoc()) : ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($row['transaction_date']); ?></td>
-                    <td><?php echo htmlspecialchars($row['transaction_type']); ?></td>
-                    <td>$<?php echo number_format((float)$row['amount'], 2); ?></td>
-                    <td><?php echo htmlspecialchars($row['customer_name'] ?? ''); ?></td>
-                    <td><?php echo htmlspecialchars($row['vendor_name'] ?? ''); ?></td>
-                    <td><?php echo htmlspecialchars($row['debit_account_name']); ?></td>
-                    <td><?php echo htmlspecialchars($row['credit_account_name']); ?></td>
-                    <td><?php echo htmlspecialchars($row['description'] ?? ''); ?></td>
-                    <td><?php echo htmlspecialchars($row['category'] ?? ''); ?></td>
-                    <td><?php echo htmlspecialchars($row['source'] ?? ''); ?></td>
-                    <td><?php echo htmlspecialchars($row['memo'] ?? ''); ?></td>
-                    <td>
-                        <a href="edit_transaction.php?id=<?php echo (int)$row['transaction_id']; ?>">Edit</a> |
-                        <a href="delete_transaction.php?id=<?php echo (int)$row['transaction_id']; ?>"
-                           onclick="return confirm('Are you sure you want to delete this transaction?');">
-                           Delete
-                        </a>
-                    </td>
-                </tr>
-            <?php endwhile; ?>
-        </table>
+    <?php if (!empty($errorMessage)) : ?>
+        <div class="card">
+            <p style="color: red; font-weight: bold; margin: 0;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        </div>
     <?php else : ?>
-        <p>No transactions found.</p>
-    <?php endif; ?>
 
-<?php endif; ?>
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;">
+                <h2 style="margin: 0;">Transaction History</h2>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <a href="transactionentry.php" class="btn btn-primary">+ Add Transaction</a>
+                    <a href="balancesheetgen.php" class="btn">Balance Sheet</a>
+                    <a href="incomestatement.php" class="btn">Income Statement</a>
+                </div>
+            </div>
+
+            <?php if ($transactions && $transactions->num_rows > 0) : ?>
+                <table>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Customer</th>
+                        <th>Vendor</th>
+                        <th>Debit Account</th>
+                        <th>Credit Account</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Source</th>
+                        <th>Memo</th>
+                        <th>Actions</th>
+                    </tr>
+
+                    <?php while ($row = $transactions->fetch_assoc()) : ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($row['transaction_date']); ?></td>
+                            <td><?php echo htmlspecialchars($row['transaction_type']); ?></td>
+                            <td>$<?php echo number_format((float)$row['amount'], 2); ?></td>
+                            <td><?php echo htmlspecialchars($row['customer_name'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars($row['vendor_name'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars($row['debit_account_name']); ?></td>
+                            <td><?php echo htmlspecialchars($row['credit_account_name']); ?></td>
+                            <td><?php echo htmlspecialchars($row['description'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars($row['category'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars($row['source'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars($row['memo'] ?? ''); ?></td>
+                            <td>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <a href="edit_transaction.php?id=<?php echo (int)$row['transaction_id']; ?>" class="btn btn-primary">
+                                        Edit
+                                    </a>
+                                    <a href="delete_transaction.php?id=<?php echo (int)$row['transaction_id']; ?>"
+                                       class="btn"
+                                       onclick="return confirm('Are you sure you want to delete this transaction?');">
+                                       Delete
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                </table>
+            <?php else : ?>
+                <p style="margin: 0;">No transactions found.</p>
+            <?php endif; ?>
+        </div>
+
+    <?php endif; ?>
+</div>
 
 </body>
 </html>

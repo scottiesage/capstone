@@ -18,7 +18,7 @@ $errorMessage = "";
 | Get balances for all accounts
 |--------------------------------------------------------------------------
 | Rules:
-| Asset, Expense     => Debit increases, Credit decreases
+| Asset, Expense => Debit increases, Credit decreases
 | Liability, Equity, Revenue => Credit increases, Debit decreases
 |
 | For the balance sheet, we only display:
@@ -94,106 +94,278 @@ $conn->close();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>Balance Sheet</title>
     <link rel="stylesheet" href="base.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Balance Sheet</title>
+
+    <style>
+        .statement-toolbar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .statement-paper {
+            background: #fff;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 48px;
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            border: 1px solid #e2e8f0;
+        }
+
+        .statement-header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .statement-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            color: #0f172a;
+        }
+
+        .statement-header p {
+            margin: 6px 0;
+            color: #64748b;
+        }
+
+        .balance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+
+        .statement-section h2 {
+            font-size: 1.2rem;
+            margin: 0 0 14px 0;
+            color: #0f172a;
+            border-bottom: 2px solid #cbd5e1;
+            padding-bottom: 8px;
+        }
+
+        .statement-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .statement-table td {
+            padding: 10px 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .statement-table td:last-child {
+            text-align: right;
+            white-space: nowrap;
+            width: 180px;
+        }
+
+        .statement-subtotal td {
+            font-weight: 700;
+            border-top: 2px solid #94a3b8;
+            border-bottom: 2px solid #94a3b8;
+            padding-top: 12px;
+            padding-bottom: 12px;
+        }
+
+        .statement-final td {
+            font-weight: 800;
+            font-size: 1.05rem;
+            border-top: 3px solid #0f172a;
+            border-bottom: 3px double #0f172a;
+            padding-top: 14px;
+            padding-bottom: 14px;
+        }
+
+        .balance-check {
+            margin-top: 36px;
+            padding-top: 20px;
+            border-top: 2px solid #cbd5e1;
+        }
+
+        .balance-check p {
+            margin: 8px 0;
+        }
+
+        .balanced-text {
+            color: #15803d;
+            font-weight: 700;
+        }
+
+        .unbalanced-text {
+            color: #b91c1c;
+            font-weight: 700;
+        }
+
+        @media (max-width: 900px) {
+            .balance-grid {
+                grid-template-columns: 1fr;
+                gap: 28px;
+            }
+
+            .statement-paper {
+                padding: 28px;
+            }
+        }
+
+        @media print {
+            .sidebar,
+            .fab,
+            .statement-toolbar,
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background: white !important;
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+                padding: 0 !important;
+            }
+
+            .statement-paper {
+                max-width: 100%;
+                box-shadow: none;
+                border: none;
+                border-radius: 0;
+                padding: 0;
+            }
+
+            .balance-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 28px;
+            }
+        }
+    </style>
 </head>
 <body>
 
-<h2>Balance Sheet</h2>
+<?php include 'navbar.php'; ?>
 
-<p>
-    <a href="transaction.php">Back to Transactions</a> |
-    <a href="logout.php">Logout</a>
-</p>
+<div class="main-content">
+    <div class="statement-toolbar no-print">
+        <button type="button" class="btn btn-primary" onclick="window.print()">Save as PDF / Print</button>
+    </div>
 
-<?php if (!empty($errorMessage)) : ?>
-    <p style="color: red;"><?php echo htmlspecialchars($errorMessage); ?></p>
-<?php else : ?>
+    <?php if (!empty($errorMessage)) : ?>
+        <div class="card" style="max-width: 1000px; margin: 0 auto;">
+            <p style="color: red; font-weight: bold; margin: 0;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        </div>
+    <?php else : ?>
 
-    <h3>Assets</h3>
-    <?php if (count($assets) > 0): ?>
-        <table border="1" cellpadding="8" cellspacing="0">
-            <tr>
-                <th>Account</th>
-                <th>Balance</th>
-            </tr>
-            <?php foreach ($assets as $account): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($account['account_name']); ?></td>
-                    <td>$<?php echo number_format($account['balance'], 2); ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <tr>
-                <th>Total Assets</th>
-                <th>$<?php echo number_format($total_assets, 2); ?></th>
-            </tr>
-        </table>
-    <?php else: ?>
-        <p>No asset accounts found.</p>
+        <div class="statement-paper">
+            <div class="statement-header">
+                <h1>Secure Ledger</h1>
+                <p><strong>Balance Sheet</strong></p>
+                <p>As of <?php echo date('F d, Y'); ?></p>
+            </div>
+
+            <div class="balance-grid">
+                <div class="statement-section">
+                    <h2>Assets</h2>
+                    <table class="statement-table">
+                        <tbody>
+                            <?php if (count($assets) > 0): ?>
+                                <?php foreach ($assets as $account): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                        <td>$<?php echo number_format($account['balance'], 2); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td>No asset accounts found.</td>
+                                    <td>$0.00</td>
+                                </tr>
+                            <?php endif; ?>
+
+                            <tr class="statement-final">
+                                <td>Total Assets</td>
+                                <td>$<?php echo number_format($total_assets, 2); ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="statement-section">
+                    <h2>Liabilities</h2>
+                    <table class="statement-table">
+                        <tbody>
+                            <?php if (count($liabilities) > 0): ?>
+                                <?php foreach ($liabilities as $account): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                        <td>$<?php echo number_format($account['balance'], 2); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td>No liability accounts found.</td>
+                                    <td>$0.00</td>
+                                </tr>
+                            <?php endif; ?>
+
+                            <tr class="statement-subtotal">
+                                <td>Total Liabilities</td>
+                                <td>$<?php echo number_format($total_liabilities, 2); ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div style="height: 28px;"></div>
+
+                    <h2>Equity</h2>
+                    <table class="statement-table">
+                        <tbody>
+                            <?php if (count($equity) > 0): ?>
+                                <?php foreach ($equity as $account): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                        <td>$<?php echo number_format($account['balance'], 2); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td>No equity accounts found.</td>
+                                    <td>$0.00</td>
+                                </tr>
+                            <?php endif; ?>
+
+                            <tr class="statement-subtotal">
+                                <td>Total Equity</td>
+                                <td>$<?php echo number_format($total_equity, 2); ?></td>
+                            </tr>
+
+                            <tr class="statement-final">
+                                <td>Total Liabilities &amp; Equity</td>
+                                <td>$<?php echo number_format($total_liabilities_and_equity, 2); ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="balance-check">
+                <p><strong>Total Assets:</strong> $<?php echo number_format($total_assets, 2); ?></p>
+                <p><strong>Total Liabilities + Equity:</strong> $<?php echo number_format($total_liabilities_and_equity, 2); ?></p>
+
+                <?php if ($is_balanced): ?>
+                    <p class="balanced-text">Balanced: Assets = Liabilities + Equity</p>
+                <?php else: ?>
+                    <p class="unbalanced-text">Not Balanced: Assets do not equal Liabilities + Equity</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
     <?php endif; ?>
-
-    <br>
-
-    <h3>Liabilities</h3>
-    <?php if (count($liabilities) > 0): ?>
-        <table border="1" cellpadding="8" cellspacing="0">
-            <tr>
-                <th>Account</th>
-                <th>Balance</th>
-            </tr>
-            <?php foreach ($liabilities as $account): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($account['account_name']); ?></td>
-                    <td>$<?php echo number_format($account['balance'], 2); ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <tr>
-                <th>Total Liabilities</th>
-                <th>$<?php echo number_format($total_liabilities, 2); ?></th>
-            </tr>
-        </table>
-    <?php else: ?>
-        <p>No liability accounts found.</p>
-    <?php endif; ?>
-
-    <br>
-
-    <h3>Equity</h3>
-    <?php if (count($equity) > 0): ?>
-        <table border="1" cellpadding="8" cellspacing="0">
-            <tr>
-                <th>Account</th>
-                <th>Balance</th>
-            </tr>
-            <?php foreach ($equity as $account): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($account['account_name']); ?></td>
-                    <td>$<?php echo number_format($account['balance'], 2); ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <tr>
-                <th>Total Equity</th>
-                <th>$<?php echo number_format($total_equity, 2); ?></th>
-            </tr>
-        </table>
-    <?php else: ?>
-        <p>No equity accounts found.</p>
-    <?php endif; ?>
-
-    <br>
-
-    <h3>Balance Check</h3>
-    <p><strong>Total Assets:</strong> $<?php echo number_format($total_assets, 2); ?></p>
-    <p><strong>Total Liabilities + Equity:</strong> $<?php echo number_format($total_liabilities_and_equity, 2); ?></p>
-
-    <?php if ($is_balanced): ?>
-        <p style="color: green;"><strong>Balanced:</strong> Assets = Liabilities + Equity</p>
-    <?php else: ?>
-        <p style="color: red;"><strong>Not Balanced:</strong> Assets do not equal Liabilities + Equity</p>
-    <?php endif; ?>
-
-<?php endif; ?>
+</div>
 
 </body>
 </html>

@@ -102,50 +102,88 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <?php include 'navbar.php'; ?>
 
 <div class="main-content">
-    <h1>Add Vendor</h1>
+    <h1 class="page-title">Add Vendor</h1>
 
     <?php if (!empty($errorMessage)) : ?>
-        <p style="color: red; font-weight: bold;">
-            <?php echo htmlspecialchars($errorMessage); ?>
-        </p>
+        <div class="card" style="max-width: 720px;">
+            <p style="color: red; font-weight: bold; margin: 0;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        </div>
     <?php endif; ?>
 
-    <form method="POST" action="">
-        <label for="vendor_name">Vendor Name *</label>
-        <input type="text" id="vendor_name" name="vendor_name" required
-               value="<?php echo htmlspecialchars($vendor_name); ?>">
+    <div class="card form-card">
+        <form method="POST" action="">
+            <label for="vendor_name">Vendor Name *</label>
+            <input
+                type="text"
+                id="vendor_name"
+                name="vendor_name"
+                required
+                value="<?php echo htmlspecialchars($vendor_name); ?>"
+            >
 
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email"
-               value="<?php echo htmlspecialchars($email); ?>">
+            <label for="email">Email</label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                value="<?php echo htmlspecialchars($email); ?>"
+            >
 
-        <label for="phone">Phone</label>
-        <input type="text" id="phone" name="phone"
-               value="<?php echo htmlspecialchars($phone); ?>">
+            <label for="phone">Phone</label>
+            <input
+                type="text"
+                id="phone"
+                name="phone"
+                value="<?php echo htmlspecialchars($phone); ?>"
+            >
 
-        <label for="address_line1">Address</label>
-        <input type="text" id="address_line1" name="address_line1"
-               value="<?php echo htmlspecialchars($address_line1); ?>">
+            <label for="address_line1">Address</label>
+            <input
+                type="text"
+                id="address_line1"
+                name="address_line1"
+                value="<?php echo htmlspecialchars($address_line1); ?>"
+            >
 
-        <label for="city">City</label>
-        <input type="text" id="city" name="city"
-               value="<?php echo htmlspecialchars($city); ?>">
+            <label for="city">City</label>
+            <input
+                type="text"
+                id="city"
+                name="city"
+                value="<?php echo htmlspecialchars($city); ?>"
+            >
 
-        <label for="state">State</label>
-        <input type="text" id="state" name="state"
-               value="<?php echo htmlspecialchars($state); ?>">
+            <label for="state">State</label>
+            <input
+                type="text"
+                id="state"
+                name="state"
+                value="<?php echo htmlspecialchars($state); ?>"
+            >
 
-        <label for="zip_code">Zip Code</label>
-        <input type="text" id="zip_code" name="zip_code"
-               value="<?php echo htmlspecialchars($zip_code); ?>">
+            <label for="zip_code">Zip Code</label>
+            <input
+                type="text"
+                id="zip_code"
+                name="zip_code"
+                value="<?php echo htmlspecialchars($zip_code); ?>"
+            >
 
-        <label for="notes">Notes</label>
-        <textarea id="notes" name="notes" rows="4"><?php echo htmlspecialchars($notes); ?></textarea>
+            <label for="notes">Notes</label>
+            <textarea
+                id="notes"
+                name="notes"
+                rows="4"
+            ><?php echo htmlspecialchars($notes); ?></textarea>
 
-        <br>
-        <input type="submit" value="Add Vendor">
-        <a href="vendor_management.php" class="btn" style="margin-left: 10px;">Cancel</a>
-    </form>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px;">
+                <button type="submit" class="btn btn-primary">Add Vendor</button>
+                <a href="vendor_management.php" class="btn">Cancel</a>
+            </div>
+        </form>
+    </div>
 </div>
 
 </body>

@@ -22,11 +22,7 @@ $zip_code = "";
 $notes = "";
 $is_active = 1;
 
-/*
-|--------------------------------------------------------------------------
-| Load existing vendor
-|--------------------------------------------------------------------------
-*/
+/* LOAD VENDOR */
 $loadSql = "
     SELECT
         vendor_id,
@@ -72,11 +68,7 @@ if (!$loadStmt) {
     $loadStmt->close();
 }
 
-/*
-|--------------------------------------------------------------------------
-| Update vendor
-|--------------------------------------------------------------------------
-*/
+/* UPDATE */
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $vendor_name = trim($_POST['vendor_name'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -179,55 +171,62 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <?php include 'navbar.php'; ?>
 
 <div class="main-content">
-    <h1>Edit Vendor</h1>
+    <h1 class="page-title">Edit Vendor</h1>
 
     <?php if (!empty($errorMessage)) : ?>
-        <p style="color: red; font-weight: bold;">
-            <?php echo htmlspecialchars($errorMessage); ?>
-        </p>
+        <div class="card" style="max-width: 720px;">
+            <p style="color: red; font-weight: bold; margin: 0;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        </div>
     <?php endif; ?>
 
-    <form method="POST" action="">
-        <label for="vendor_name">Vendor Name *</label>
-        <input type="text" id="vendor_name" name="vendor_name" required
-               value="<?php echo htmlspecialchars($vendor_name); ?>">
+    <div class="card form-card">
+        <form method="POST" action="">
 
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email"
-               value="<?php echo htmlspecialchars($email); ?>">
+            <label>Vendor Name *</label>
+            <input type="text" name="vendor_name" required
+                   value="<?php echo htmlspecialchars($vendor_name); ?>">
 
-        <label for="phone">Phone</label>
-        <input type="text" id="phone" name="phone"
-               value="<?php echo htmlspecialchars($phone); ?>">
+            <label>Email</label>
+            <input type="email" name="email"
+                   value="<?php echo htmlspecialchars($email); ?>">
 
-        <label for="address_line1">Address</label>
-        <input type="text" id="address_line1" name="address_line1"
-               value="<?php echo htmlspecialchars($address_line1); ?>">
+            <label>Phone</label>
+            <input type="text" name="phone"
+                   value="<?php echo htmlspecialchars($phone); ?>">
 
-        <label for="city">City</label>
-        <input type="text" id="city" name="city"
-               value="<?php echo htmlspecialchars($city); ?>">
+            <label>Address</label>
+            <input type="text" name="address_line1"
+                   value="<?php echo htmlspecialchars($address_line1); ?>">
 
-        <label for="state">State</label>
-        <input type="text" id="state" name="state"
-               value="<?php echo htmlspecialchars($state); ?>">
+            <label>City</label>
+            <input type="text" name="city"
+                   value="<?php echo htmlspecialchars($city); ?>">
 
-        <label for="zip_code">Zip Code</label>
-        <input type="text" id="zip_code" name="zip_code"
-               value="<?php echo htmlspecialchars($zip_code); ?>">
+            <label>State</label>
+            <input type="text" name="state"
+                   value="<?php echo htmlspecialchars($state); ?>">
 
-        <label for="notes">Notes</label>
-        <textarea id="notes" name="notes" rows="4"><?php echo htmlspecialchars($notes); ?></textarea>
+            <label>Zip Code</label>
+            <input type="text" name="zip_code"
+                   value="<?php echo htmlspecialchars($zip_code); ?>">
 
-        <label style="margin-top: 15px;">
-            <input type="checkbox" name="is_active" value="1" <?php echo $is_active ? 'checked' : ''; ?>>
-            Active
-        </label>
+            <label>Notes</label>
+            <textarea name="notes" rows="4"><?php echo htmlspecialchars($notes); ?></textarea>
 
-        <br><br>
-        <input type="submit" value="Update Vendor">
-        <a href="vendor_management.php" class="btn" style="margin-left: 10px;">Cancel</a>
-    </form>
+            <label style="margin-top: 15px;">
+                <input type="checkbox" name="is_active" value="1" <?php echo $is_active ? 'checked' : ''; ?>>
+                Active
+            </label>
+
+            <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Update Vendor</button>
+                <a href="vendor_management.php" class="btn">Cancel</a>
+            </div>
+
+        </form>
+    </div>
 </div>
 
 </body>

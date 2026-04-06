@@ -80,7 +80,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     <div class="auth-box">
 
-        <h1 class="text-center">Secure Ledger</h1>
+       <h1 class="text-center">Secure Ledger</h1>
         <p class="text-center">Login to your account</p>
 
         <form method="POST" action="login.php">
