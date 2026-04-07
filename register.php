@@ -5,13 +5,13 @@ require_once 'send_verification_email.php';
 
 $errorMessage = "";
 $successMessage = "";
+$email = "";
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm = $_POST['confirm_password'] ?? '';
 
-    // Basic validation
     if (empty($email) || empty($password) || empty($confirm)) {
         $errorMessage = "All fields are required.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -21,8 +21,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } elseif (strlen($password) < 8) {
         $errorMessage = "Password must be at least 8 characters long.";
     } else {
-        // Check if email already exists
         $check = $conn->prepare("SELECT user_id, is_verified FROM User WHERE email = ?");
+
         if (!$check) {
             $errorMessage = "Database error: " . $conn->error;
         } else {
@@ -36,7 +36,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 if ((int)$existingUser['is_verified'] === 1) {
                     $errorMessage = "An account with that email already exists.";
                 } else {
-                    // Update unverified account with a new code instead of making duplicate account
                     $code = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
                     $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
                     $hash = password_hash($password, PASSWORD_DEFAULT);
@@ -72,7 +71,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     }
                 }
             } else {
-                // Create new account
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $code = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
                 $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
@@ -116,41 +114,70 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="base.css">
     <meta charset="UTF-8">
-    <title>Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account</title>
+    <link rel="stylesheet" href="base.css">
 </head>
 <body>
 
-    <h2>Create Account</h2>
+<div class="auth-page">
+    <div class="auth-box">
+        <h1 class="text-center">Secure Ledger</h1>
+        <p class="text-center">Create your account</p>
 
-    <?php if (!empty($errorMessage)): ?>
-        <p style="color:red;"><?php echo htmlspecialchars($errorMessage); ?></p>
-    <?php endif; ?>
+        <?php if (!empty($errorMessage)): ?>
+            <p style="color: #dc2626; font-weight: 600; margin-bottom: 16px; text-align: center;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        <?php endif; ?>
 
-    <?php if (!empty($successMessage)): ?>
-        <p style="color:green;"><?php echo htmlspecialchars($successMessage); ?></p>
-    <?php endif; ?>
+        <?php if (!empty($successMessage)): ?>
+            <p style="color: #15803d; font-weight: 600; margin-bottom: 16px; text-align: center;">
+                <?php echo htmlspecialchars($successMessage); ?>
+            </p>
+        <?php endif; ?>
 
-    <form method="POST" action="">
-        <label>Email:</label><br>
-        <input type="email" name="email" required
-               value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>">
-        <br><br>
+        <form method="POST" action="register.php">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    required
+                    value="<?php echo htmlspecialchars($email); ?>"
+                >
+            </div>
 
-        <label>Password:</label><br>
-        <input type="password" name="password" required>
-        <br><br>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                >
+            </div>
 
-        <label>Confirm Password:</label><br>
-        <input type="password" name="confirm_password" required>
-        <br><br>
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    required
+                >
+            </div>
 
-        <button type="submit">Register</button>
-    </form>
+            <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+        </form>
 
-    <br>
-    <a href="login.php">Back to Login</a>
+        <div class="mt-3 text-center">
+            <a href="login.php">Back to Login</a>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

@@ -108,49 +108,61 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Account</title>
     <link rel="stylesheet" href="base.css">
-    <title>Verify Code</title>
 </head>
 <body>
 
-<div class="container">
-    <h2>Verify Your Account</h2>
+<div class="auth-page">
+    <div class="auth-box">
+        <h1 class="text-center">Secure Ledger</h1>
+        <p class="text-center">Verify your account</p>
 
-    <?php if (!empty($pendingEmail)): ?>
-        <p class="email-note">
-            A verification code was sent to
-            <strong><?php echo htmlspecialchars($pendingEmail); ?></strong>
-        </p>
-    <?php endif; ?>
+        <?php if (!empty($pendingEmail)): ?>
+            <p style="text-align: center; margin-bottom: 16px; color: #475569;">
+                A verification code was sent to
+                <strong><?php echo htmlspecialchars($pendingEmail); ?></strong>
+            </p>
+        <?php endif; ?>
 
-    <?php if (!empty($errorMessage)): ?>
-        <p class="message-error"><?php echo htmlspecialchars($errorMessage); ?></p>
-    <?php endif; ?>
+        <?php if (!empty($errorMessage)): ?>
+            <p style="color: #dc2626; font-weight: 600; margin-bottom: 16px; text-align: center;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        <?php endif; ?>
 
-    <?php if (!empty($successMessage)): ?>
-        <p class="message-success"><?php echo htmlspecialchars($successMessage); ?></p>
-    <?php endif; ?>
+        <?php if (!empty($successMessage)): ?>
+            <p style="color: #15803d; font-weight: 600; margin-bottom: 16px; text-align: center;">
+                <?php echo htmlspecialchars($successMessage); ?>
+            </p>
+        <?php endif; ?>
 
-    <form method="POST" action="">
-        <label for="code">Enter Code</label>
-        <input
-            type="text"
-            id="code"
-            name="code"
-            maxlength="6"
-            inputmode="numeric"
-            pattern="\d{6}"
-            placeholder="Enter 6-digit code"
-            required
-        >
-        <button type="submit">Verify Account</button>
-    </form>
+        <form method="POST" action="verify_code.php">
+            <div class="form-group">
+                <label for="code">Enter Code</label>
+                <input
+                    type="text"
+                    id="code"
+                    name="code"
+                    maxlength="6"
+                    inputmode="numeric"
+                    pattern="\d{6}"
+                    placeholder="Enter 6-digit code"
+                    required
+                >
+            </div>
 
-    <form action="resend_code.php" method="POST">
-        <button type="submit" class="secondary-btn">Resend Code</button>
-    </form>
+            <button type="submit" class="btn btn-primary btn-full">Verify Account</button>
+        </form>
 
-    <a class="back-link" href="login.php">Back to Login</a>
+        <form action="resend_code.php" method="POST" style="margin-top: 12px;">
+            <button type="submit" class="btn btn-full">Resend Code</button>
+        </form>
+
+        <div class="mt-3 text-center">
+            <a href="login.php">Back to Login</a>
+        </div>
+    </div>
 </div>
 
 </body>

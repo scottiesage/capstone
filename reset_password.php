@@ -4,6 +4,7 @@ require_once 'db_connect.php';
 
 $errorMessage = "";
 $successMessage = "";
+$email = "";
 
 if (isset($_SESSION['reset_success'])) {
     $successMessage = $_SESSION['reset_success'];
@@ -11,6 +12,7 @@ if (isset($_SESSION['reset_success'])) {
 }
 
 $resetEmail = $_SESSION['reset_email'] ?? '';
+$email = $resetEmail;
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email = trim($_POST['email'] ?? '');
@@ -93,64 +95,81 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="base.css">
     <title>Reset Password</title>
+    <link rel="stylesheet" href="base.css">
 </head>
 <body>
 
-<div class="container">
-    <h2>Reset Password</h2>
+<div class="auth-page">
+    <div class="auth-box">
+        <h1 class="text-center">Secure Ledger</h1>
+        <p class="text-center">Reset your password</p>
 
-    <?php if (!empty($successMessage)): ?>
-        <div class="message-success"><?php echo htmlspecialchars($successMessage); ?></div>
-    <?php endif; ?>
+        <?php if (!empty($successMessage)): ?>
+            <p style="color: #15803d; font-weight: 600; margin-bottom: 16px; text-align: center;">
+                <?php echo htmlspecialchars($successMessage); ?>
+            </p>
+        <?php endif; ?>
 
-    <?php if (!empty($errorMessage)): ?>
-        <div class="message-error"><?php echo htmlspecialchars($errorMessage); ?></div>
-    <?php endif; ?>
+        <?php if (!empty($errorMessage)): ?>
+            <p style="color: #dc2626; font-weight: 600; margin-bottom: 16px; text-align: center;">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </p>
+        <?php endif; ?>
 
-    <form method="POST" action="">
-        <label for="email">Email</label>
-        <input
-            type="email"
-            id="email"
-            name="email"
-            value="<?php echo htmlspecialchars($resetEmail ?: ($email ?? '')); ?>"
-            required
-        >
+        <form method="POST" action="reset_password.php">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value="<?php echo htmlspecialchars($email); ?>"
+                    required
+                >
+            </div>
 
-        <label for="code">Reset Code</label>
-        <input
-            type="text"
-            id="code"
-            name="code"
-            maxlength="6"
-            inputmode="numeric"
-            pattern="\d{6}"
-            placeholder="Enter 6-digit code"
-            required
-        >
+            <div class="form-group">
+                <label for="code">Reset Code</label>
+                <input
+                    type="text"
+                    id="code"
+                    name="code"
+                    maxlength="6"
+                    inputmode="numeric"
+                    pattern="\d{6}"
+                    placeholder="Enter 6-digit code"
+                    required
+                >
+            </div>
 
-        <label for="password">New Password</label>
-        <input
-            type="password"
-            id="password"
-            name="password"
-            required
-        >
+            <div class="form-group">
+                <label for="password">New Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                >
+            </div>
 
-        <label for="confirm_password">Confirm New Password</label>
-        <input
-            type="password"
-            id="confirm_password"
-            name="confirm_password"
-            required
-        >
+            <div class="form-group">
+                <label for="confirm_password">Confirm New Password</label>
+                <input
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    required
+                >
+            </div>
 
-        <button type="submit">Reset Password</button>
-    </form>
+            <button type="submit" class="btn btn-primary btn-full">Reset Password</button>
+        </form>
 
-    <a class="back-link" href="login.php">Back to Login</a>
+        <div class="mt-3 text-center">
+            <a href="login.php">Back to Login</a>
+        </div>
+    </div>
 </div>
 
 </body>

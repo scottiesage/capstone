@@ -11,13 +11,14 @@ $allowed_types = ['Sale', 'Purchase', 'Payment', 'Receipt', 'Journal Entry'];
 
 /*
 |--------------------------------------------------------------------------
-| Load vendors
+| Load active vendors only
 |--------------------------------------------------------------------------
 */
 $vendorStmt = $conn->prepare("
     SELECT vendor_id, vendor_name
     FROM Vendor
     WHERE user_id = ?
+      AND is_active = 1
     ORDER BY vendor_name ASC
 ");
 $vendorStmt->bind_param("i", $user_id);
@@ -26,13 +27,14 @@ $vendorResult = $vendorStmt->get_result();
 
 /*
 |--------------------------------------------------------------------------
-| Load accounts
+| Load active accounts only
 |--------------------------------------------------------------------------
 */
 $accountStmt = $conn->prepare("
     SELECT account_id, account_name, account_type
     FROM Account
     WHERE user_id = ?
+      AND is_active = 1
     ORDER BY account_type ASC, account_name ASC
 ");
 $accountStmt->bind_param("i", $user_id);
@@ -67,7 +69,7 @@ $credit_account_id = '';
 |--------------------------------------------------------------------------
 */
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $vendor_id = isset($_POST['vendor_id']) && $_POST['vendor_id'] !== '' ? (int)$_POST['vendor_id'] : null;
+    $vendor_id = isset($_POST['vendor_id']) ? (int)$_POST['vendor_id'] : 0;
     $customer_name = trim($_POST['customer_name'] ?? '');
     $transaction_type = trim($_POST['transaction_type'] ?? '');
     $transaction_date = trim($_POST['transaction_date'] ?? '');
@@ -75,19 +77,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $description = trim($_POST['description'] ?? '');
     $memo = trim($_POST['memo'] ?? '');
     $category = trim($_POST['category'] ?? '');
-    $source = trim($_POST['source'] ?? 'Manual');
+    $source = trim($_POST['source'] ?? '');
     $debit_account_id = isset($_POST['debit_account_id']) ? (int)$_POST['debit_account_id'] : 0;
     $credit_account_id = isset($_POST['credit_account_id']) ? (int)$_POST['credit_account_id'] : 0;
     $force_insert = isset($_POST['force_insert']) && $_POST['force_insert'] === '1';
 
-    if (!in_array($transaction_type, $allowed_types)) {
+    if ($vendor_id <= 0) {
+        $errorMessage = "Vendor is required.";
+    } elseif (empty($customer_name)) {
+        $errorMessage = "Customer name is required.";
+    } elseif (!in_array($transaction_type, $allowed_types)) {
         $errorMessage = "Invalid transaction type.";
     } elseif (empty($transaction_date)) {
         $errorMessage = "Transaction date is required.";
     } elseif ($amount === '' || !is_numeric($amount) || (float)$amount <= 0) {
         $errorMessage = "Amount must be a valid number greater than 0.";
-    } elseif ($debit_account_id <= 0 || $credit_account_id <= 0) {
-        $errorMessage = "Both debit and credit accounts are required.";
+    } elseif (empty($category)) {
+        $errorMessage = "Category is required.";
+    } elseif (empty($source)) {
+        $errorMessage = "Source is required.";
+    } elseif ($debit_account_id <= 0) {
+        $errorMessage = "Debit account is required.";
+    } elseif ($credit_account_id <= 0) {
+        $errorMessage = "Credit account is required.";
     } elseif ($debit_account_id === $credit_account_id) {
         $errorMessage = "Debit and credit accounts cannot be the same.";
     } else {
@@ -95,72 +107,125 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         /*
         |--------------------------------------------------------------------------
+        | Validate vendor
+        |--------------------------------------------------------------------------
+        */
+        $vendorCheckStmt = $conn->prepare("
+            SELECT vendor_id
+            FROM Vendor
+            WHERE vendor_id = ?
+              AND user_id = ?
+              AND is_active = 1
+            LIMIT 1
+        ");
+
+        if ($vendorCheckStmt) {
+            $vendorCheckStmt->bind_param("ii", $vendor_id, $user_id);
+            $vendorCheckStmt->execute();
+            $vendorCheckResult = $vendorCheckStmt->get_result();
+
+            if ($vendorCheckResult->num_rows === 0) {
+                $errorMessage = "Please select a valid active vendor.";
+            }
+
+            $vendorCheckStmt->close();
+        } else {
+            $errorMessage = "Prepare failed during vendor validation: " . $conn->error;
+        }
+
+/*
+        |--------------------------------------------------------------------------
+        | Validate debit account
+        |--------------------------------------------------------------------------
+        */
+        if (empty($errorMessage)) {
+            $debitCheckStmt = $conn->prepare("
+                SELECT account_id
+                FROM Account
+                WHERE account_id = ?
+                  AND user_id = ?
+                  AND is_active = 1
+                LIMIT 1
+            ");
+
+            if ($debitCheckStmt) {
+                $debitCheckStmt->bind_param("ii", $debit_account_id, $user_id);
+                $debitCheckStmt->execute();
+                $debitCheckResult = $debitCheckStmt->get_result();
+
+                if ($debitCheckResult->num_rows === 0) {
+                    $errorMessage = "Please select a valid active debit account.";
+                }
+
+                $debitCheckStmt->close();
+            } else {
+                $errorMessage = "Prepare failed during debit account validation: " . $conn->error;
+            }
+        }
+                /*
+        |--------------------------------------------------------------------------
+        | Validate credit account
+        |--------------------------------------------------------------------------
+        */
+        if (empty($errorMessage)) {
+            $creditCheckStmt = $conn->prepare("
+                SELECT account_id
+                FROM Account
+                WHERE account_id = ?
+                  AND user_id = ?
+                  AND is_active = 1
+                LIMIT 1
+            ");
+
+            if ($creditCheckStmt) {
+                $creditCheckStmt->bind_param("ii", $credit_account_id, $user_id);
+                $creditCheckStmt->execute();
+                $creditCheckResult = $creditCheckStmt->get_result();
+
+                if ($creditCheckResult->num_rows === 0) {
+                    $errorMessage = "Please select a valid active credit account.";
+                }
+
+                $creditCheckStmt->close();
+            } else {
+                $errorMessage = "Prepare failed during credit account validation: " . $conn->error;
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
         | Duplicate check
         |--------------------------------------------------------------------------
         */
-        if (!$force_insert) {
-            $duplicateStmt = null;
+        if (empty($errorMessage) && !$force_insert) {
+            $duplicateSql = "
+                SELECT
+                    t.transaction_id,
+                    t.transaction_date,
+                    t.amount,
+                    t.description,
+                    v.vendor_name
+                FROM `Transaction` t
+                LEFT JOIN Vendor v
+                    ON t.vendor_id = v.vendor_id
+                WHERE t.user_id = ?
+                  AND t.transaction_date = ?
+                  AND t.amount = ?
+                  AND t.vendor_id = ?
+                LIMIT 1
+            ";
 
-            if ($vendor_id === null) {
-                $duplicateSql = "
-                    SELECT
-                        t.transaction_id,
-                        t.transaction_date,
-                        t.amount,
-                        t.description,
-                        v.vendor_name
-                    FROM `Transaction` t
-                    LEFT JOIN Vendor v
-                        ON t.vendor_id = v.vendor_id
-                    WHERE t.user_id = ?
-                      AND t.transaction_date = ?
-                      AND t.amount = ?
-                      AND t.vendor_id IS NULL
-                    LIMIT 1
-                ";
-
-                $duplicateStmt = $conn->prepare($duplicateSql);
-
-                if ($duplicateStmt) {
-                    $duplicateStmt->bind_param(
-                        "isd",
-                        $user_id,
-                        $transaction_date,
-                        $amount
-                    );
-                }
-            } else {
-                $duplicateSql = "
-                    SELECT
-                        t.transaction_id,
-                        t.transaction_date,
-                        t.amount,
-                        t.description,
-                        v.vendor_name
-                    FROM `Transaction` t
-                    LEFT JOIN Vendor v
-                        ON t.vendor_id = v.vendor_id
-                    WHERE t.user_id = ?
-                      AND t.transaction_date = ?
-                      AND t.amount = ?
-                      AND t.vendor_id = ?
-                    LIMIT 1
-                ";
-
-                $duplicateStmt = $conn->prepare($duplicateSql);
-
-                if ($duplicateStmt) {
-                    $duplicateStmt->bind_param(
-                        "isdi",
-                        $user_id,
-                        $transaction_date,
-                        $amount,
-                        $vendor_id
-                    );
-                }
-            }
+            $duplicateStmt = $conn->prepare($duplicateSql);
 
             if ($duplicateStmt) {
+                $duplicateStmt->bind_param(
+                    "isdi",
+                    $user_id,
+                    $transaction_date,
+                    $amount,
+                    $vendor_id
+                );
+
                 $duplicateStmt->execute();
                 $duplicateResult = $duplicateStmt->get_result();
 
@@ -296,15 +361,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 name="customer_name"
                 id="customer_name"
                 value="<?php echo htmlspecialchars($customer_name); ?>"
+                required
             >
 
             <label for="vendor_id">Vendor</label>
-            <select name="vendor_id" id="vendor_id">
-                <option value="">-- No Vendor --</option>
+            <select name="vendor_id" id="vendor_id" required>
+                <option value="">-- Select Vendor --</option>
                 <?php
                 if ($vendorResult && $vendorResult->num_rows > 0) {
                     while ($vendor = $vendorResult->fetch_assoc()) {
-                        $selected = ($vendor_id !== null && $vendor_id !== '' && (int)$vendor_id === (int)$vendor['vendor_id']) ? 'selected' : '';
+                        $selected = ((int)$vendor_id === (int)$vendor['vendor_id']) ? 'selected' : '';
                         echo "<option value='" . htmlspecialchars($vendor['vendor_id']) . "' $selected>" .
                              htmlspecialchars($vendor['vendor_name']) .
                              "</option>";
@@ -350,6 +416,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 name="category"
                 id="category"
                 value="<?php echo htmlspecialchars($category); ?>"
+                required
             >
 
             <label for="source">Source</label>
@@ -358,6 +425,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 name="source"
                 id="source"
                 value="<?php echo htmlspecialchars($source); ?>"
+                required
             >
 
             <div style="display:flex; gap:12px; margin-top:20px; flex-wrap: wrap;">

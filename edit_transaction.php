@@ -8,7 +8,7 @@ $errorMessage = "";
 $allowed_types = ['Sale', 'Purchase', 'Payment', 'Receipt', 'Journal Entry'];
 
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    header("Location: transaction.php");
+    header("Location: transactions.php");
     exit();
 }
 
@@ -69,7 +69,7 @@ if (!$transaction) {
     $vendorStmt->close();
     $accountStmt->close();
     $conn->close();
-    header("Location: transaction.php");
+    header("Location: transactions.php");
     exit();
 }
 
@@ -157,7 +157,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             );
 
             if ($stmt->execute()) {
-                header("Location: transaction.php");
+                header("Location: transactions.php");
                 exit();
             } else {
                 $errorMessage = "Error updating transaction: " . $stmt->error;
@@ -184,7 +184,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <h2>Edit Transaction</h2>
 
 <p>
-    <a href="transaction.php">Back to Transactions</a> |
+    <a href="transactions.php">Back to Transactions</a> |
     <a href="dashboard.php">Dashboard</a> |
     <a href="logout.php">Logout</a>
 </p>

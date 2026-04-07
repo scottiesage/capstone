@@ -21,6 +21,6 @@ if (isset($_GET['id'])) {
 
 $conn->close();
 
-header("Location: transaction.php");
+header("Location: transactions.php");
 exit();
 ?>

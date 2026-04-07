@@ -438,3 +438,13 @@ table tr:hover {
 .mt-2 { margin-top: 10px; }
 .mt-3 { margin-top: 20px; }
 .mt-4 { margin-top: 30px; }
+
+.error-message {
+    background-color: #fee2e2;
+    color: #991b1b;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    text-align: center;
+    font-weight: 500;
+}

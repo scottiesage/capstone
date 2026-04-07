@@ -215,10 +215,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <label>Notes</label>
             <textarea name="notes" rows="4"><?php echo htmlspecialchars($notes); ?></textarea>
 
-            <label style="margin-top: 15px;">
-                <input type="checkbox" name="is_active" value="1" <?php echo $is_active ? 'checked' : ''; ?>>
-                Active
-            </label>
+<div style="display: inline-flex; align-items: center; gap: 10px; margin-top: 15px;">
+    <input
+        type="checkbox"
+        name="is_active"
+        id="is_active"
+        value="1"
+        <?php echo $is_active ? 'checked' : ''; ?>
+        style="width: auto; margin: 0;"
+    >
+    <label for="is_active" style="margin: 0; display: inline;">Active</label>
+</div>
 
             <div style="display: flex; gap: 12px; margin-top: 20px;">
                 <button type="submit" class="btn btn-primary">Update Vendor</button>

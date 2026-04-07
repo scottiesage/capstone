@@ -4,6 +4,7 @@ require_once 'db_connect.php';
 
 $errorMessage = "";
 $successMessage = "";
+$email = "";
 
 // Optional flash message from other pages
 if (isset($_SESSION['login_error'])) {
@@ -33,7 +34,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         ");
 
         if (!$stmt) {
-            $errorMessage = "Database error: " . $conn->error;
+            $errorMessage = "Database error. Please try again.";
         } else {
             $stmt->bind_param("s", $email);
             $stmt->execute();
@@ -42,7 +43,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmt->close();
 
             if (!$user || !password_verify($password, $user['password_hash'])) {
-                $errorMessage = "Invalid email or password.";
+                $errorMessage = "Email or password is incorrect.";
             } elseif ((int)$user['is_verified'] === 0) {
                 $_SESSION['pending_user_id'] = $user['user_id'];
                 $_SESSION['pending_user_email'] = $user['email'];
@@ -71,32 +72,52 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Secure Ledger</title>
     <link rel="stylesheet" href="base.css">
-    <title>Login</title>
 </head>
 <body>
 
 <div class="auth-page">
-
     <div class="auth-box">
 
-       <h1 class="text-center">Secure Ledger</h1>
+        <h1 class="text-center">Secure Ledger</h1>
         <p class="text-center">Login to your account</p>
 
+        <?php if (!empty($errorMessage)): ?>
+            <div class="error-message">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($successMessage)): ?>
+            <div class="card" style="padding: 12px; margin-bottom: 15px; text-align: center; color: #166534; background-color: #dcfce7; border: 1px solid #bbf7d0;">
+                <?php echo htmlspecialchars($successMessage); ?>
+            </div>
+        <?php endif; ?>
+
         <form method="POST" action="login.php">
-
-            <div>
-                <label>Email</label>
-                <input type="email" name="email" required>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value="<?php echo htmlspecialchars($email); ?>"
+                    required
+                >
             </div>
 
-            <div>
-                <label>Password</label>
-                <input type="password" name="password" required>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                >
             </div>
 
-            <button class="btn btn-primary btn-full">Login</button>
-
+            <button type="submit" class="btn btn-primary btn-full">Login</button>
         </form>
 
         <div class="mt-3 text-center">
@@ -105,7 +126,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
 
     </div>
-
 </div>
 
 </body>

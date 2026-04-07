@@ -8,28 +8,29 @@ $assets = [];
 $liabilities = [];
 $equity = [];
 
-$total_assets = 0;
-$total_liabilities = 0;
-$total_equity = 0;
+$total_assets = 0.00;
+$total_liabilities = 0.00;
+$total_equity = 0.00;
+$net_income = 0.00;
 $errorMessage = "";
 
 /*
 |--------------------------------------------------------------------------
-| Get balances for all accounts
+| Load balance sheet accounts (Assets, Liabilities, Equity)
 |--------------------------------------------------------------------------
-| Rules:
-| Asset, Expense => Debit increases, Credit decreases
-| Liability, Equity, Revenue => Credit increases, Debit decreases
 |
-| For the balance sheet, we only display:
-| Asset, Liability, Equity
-|--------------------------------------------------------------------------
+| Balance rules:
+| - Asset / Expense increase with debits, decrease with credits
+| - Liability / Equity / Revenue increase with credits, decrease with debits
+|
 */
-$sql = "
+$balanceSheetSql = "
     SELECT
         a.account_id,
+        a.account_code,
         a.account_name,
         a.account_type,
+        a.is_active,
         COALESCE(SUM(
             CASE
                 WHEN t.debit_account_id = a.account_id THEN
@@ -51,22 +52,28 @@ $sql = "
         OR a.account_id = t.credit_account_id
     WHERE a.user_id = ?
       AND a.account_type IN ('Asset', 'Liability', 'Equity')
-    GROUP BY a.account_id, a.account_name, a.account_type
+    GROUP BY
+        a.account_id,
+        a.account_code,
+        a.account_name,
+        a.account_type,
+        a.is_active
     ORDER BY
         FIELD(a.account_type, 'Asset', 'Liability', 'Equity'),
+        a.account_code ASC,
         a.account_name ASC
 ";
 
-$stmt = $conn->prepare($sql);
+$balanceStmt = $conn->prepare($balanceSheetSql);
 
-if (!$stmt) {
-    $errorMessage = "Prepare failed: " . $conn->error;
+if (!$balanceStmt) {
+    $errorMessage = "Prepare failed while loading balance sheet accounts: " . $conn->error;
 } else {
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $balanceStmt->bind_param("i", $user_id);
+    $balanceStmt->execute();
+    $balanceResult = $balanceStmt->get_result();
 
-    while ($row = $result->fetch_assoc()) {
+    while ($row = $balanceResult->fetch_assoc()) {
         $row['balance'] = (float)$row['balance'];
 
         if ($row['account_type'] === 'Asset') {
@@ -81,13 +88,84 @@ if (!$stmt) {
         }
     }
 
-    $stmt->close();
+    $balanceStmt->close();
 }
 
-$total_liabilities_and_equity = $total_liabilities + $total_equity;
+/*
+|--------------------------------------------------------------------------
+| Calculate net income
+|--------------------------------------------------------------------------
+|
+| Net Income = Revenues - Expenses
+|
+| Revenue normal balance = credit
+| Expense normal balance = debit
+|
+*/
+if (empty($errorMessage)) {
+    $netIncomeSql = "
+        SELECT
+            COALESCE(SUM(
+                CASE
+                    WHEN a.account_type = 'Revenue' AND t.credit_account_id = a.account_id THEN t.amount
+                    WHEN a.account_type = 'Revenue' AND t.debit_account_id = a.account_id THEN -t.amount
+                    WHEN a.account_type = 'Expense' AND t.debit_account_id = a.account_id THEN -t.amount
+                    WHEN a.account_type = 'Expense' AND t.credit_account_id = a.account_id THEN t.amount
+                    ELSE 0
+                END
+            ), 0) AS net_income
+        FROM Account a
+        LEFT JOIN `Transaction` t
+            ON a.account_id = t.debit_account_id
+            OR a.account_id = t.credit_account_id
+        WHERE a.user_id = ?
+          AND a.account_type IN ('Revenue', 'Expense')
+    ";
+
+    $netStmt = $conn->prepare($netIncomeSql);
+
+    if (!$netStmt) {
+        $errorMessage = "Prepare failed while calculating net income: " . $conn->error;
+    } else {
+        $netStmt->bind_param("i", $user_id);
+        $netStmt->execute();
+        $netResult = $netStmt->get_result();
+
+        if ($netRow = $netResult->fetch_assoc()) {
+            $net_income = (float)$netRow['net_income'];
+        }
+
+        $netStmt->close();
+    }
+}
+
+$total_equity_with_income = $total_equity + $net_income;
+$total_liabilities_and_equity = $total_liabilities + $total_equity_with_income;
 $is_balanced = abs($total_assets - $total_liabilities_and_equity) < 0.01;
 
 $conn->close();
+
+/*
+|--------------------------------------------------------------------------
+| Helper for display names
+|--------------------------------------------------------------------------
+*/
+function formatAccountDisplayName(array $account): string
+{
+    $displayName = '';
+
+    if (!empty($account['account_code'])) {
+        $displayName .= $account['account_code'] . ' - ';
+    }
+
+    $displayName .= $account['account_name'];
+
+    if ((int)$account['is_active'] !== 1) {
+        $displayName .= ' (Inactive)';
+    }
+
+    return $displayName;
+}
 ?>
 
 <!DOCTYPE html>
@@ -259,7 +337,6 @@ $conn->close();
             </p>
         </div>
     <?php else : ?>
-
         <div class="statement-paper">
             <div class="statement-header">
                 <h1>Secure Ledger</h1>
@@ -272,10 +349,10 @@ $conn->close();
                     <h2>Assets</h2>
                     <table class="statement-table">
                         <tbody>
-                            <?php if (count($assets) > 0): ?>
+                            <?php if (!empty($assets)): ?>
                                 <?php foreach ($assets as $account): ?>
                                     <tr>
-                                        <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                        <td><?php echo htmlspecialchars(formatAccountDisplayName($account)); ?></td>
                                         <td>$<?php echo number_format($account['balance'], 2); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -298,10 +375,10 @@ $conn->close();
                     <h2>Liabilities</h2>
                     <table class="statement-table">
                         <tbody>
-                            <?php if (count($liabilities) > 0): ?>
+                            <?php if (!empty($liabilities)): ?>
                                 <?php foreach ($liabilities as $account): ?>
                                     <tr>
-                                        <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                        <td><?php echo htmlspecialchars(formatAccountDisplayName($account)); ?></td>
                                         <td>$<?php echo number_format($account['balance'], 2); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -324,10 +401,10 @@ $conn->close();
                     <h2>Equity</h2>
                     <table class="statement-table">
                         <tbody>
-                            <?php if (count($equity) > 0): ?>
+                            <?php if (!empty($equity)): ?>
                                 <?php foreach ($equity as $account): ?>
                                     <tr>
-                                        <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                        <td><?php echo htmlspecialchars(formatAccountDisplayName($account)); ?></td>
                                         <td>$<?php echo number_format($account['balance'], 2); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -338,9 +415,14 @@ $conn->close();
                                 </tr>
                             <?php endif; ?>
 
+                            <tr>
+                                <td>Net Income</td>
+                                <td>$<?php echo number_format($net_income, 2); ?></td>
+                            </tr>
+
                             <tr class="statement-subtotal">
                                 <td>Total Equity</td>
-                                <td>$<?php echo number_format($total_equity, 2); ?></td>
+                                <td>$<?php echo number_format($total_equity_with_income, 2); ?></td>
                             </tr>
 
                             <tr class="statement-final">
@@ -363,7 +445,6 @@ $conn->close();
                 <?php endif; ?>
             </div>
         </div>
-
     <?php endif; ?>
 </div>
 

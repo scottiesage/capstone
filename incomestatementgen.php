@@ -20,8 +20,10 @@ $errorMessage = "";
 $sql = "
     SELECT
         a.account_id,
+        a.account_code,
         a.account_name,
         a.account_type,
+        a.is_active,
         COALESCE(SUM(
             CASE
                 WHEN t.debit_account_id = a.account_id THEN
@@ -43,9 +45,15 @@ $sql = "
         OR a.account_id = t.credit_account_id
     WHERE a.user_id = ?
       AND a.account_type IN ('Revenue', 'Expense')
-    GROUP BY a.account_id, a.account_name, a.account_type
+    GROUP BY
+        a.account_id,
+        a.account_code,
+        a.account_name,
+        a.account_type,
+        a.is_active
     ORDER BY
         FIELD(a.account_type, 'Revenue', 'Expense'),
+        a.account_code ASC,
         a.account_name ASC
 ";
 
@@ -241,7 +249,23 @@ $conn->close();
                     <?php if (count($revenues) > 0): ?>
                         <?php foreach ($revenues as $account): ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                <td>
+                                    <?php
+                                    $displayName = '';
+
+                                    if (!empty($account['account_code'])) {
+                                        $displayName .= $account['account_code'] . ' - ';
+                                    }
+
+                                    $displayName .= $account['account_name'];
+
+                                    if ((int)$account['is_active'] !== 1) {
+                                        $displayName .= ' (Inactive)';
+                                    }
+
+                                    echo htmlspecialchars($displayName);
+                                    ?>
+                                </td>
                                 <td>$<?php echo number_format($account['balance'], 2); ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -266,7 +290,23 @@ $conn->close();
                     <?php if (count($expenses) > 0): ?>
                         <?php foreach ($expenses as $account): ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($account['account_name']); ?></td>
+                                <td>
+                                    <?php
+                                    $displayName = '';
+
+                                    if (!empty($account['account_code'])) {
+                                        $displayName .= $account['account_code'] . ' - ';
+                                    }
+
+                                    $displayName .= $account['account_name'];
+
+                                    if ((int)$account['is_active'] !== 1) {
+                                        $displayName .= ' (Inactive)';
+                                    }
+
+                                    echo htmlspecialchars($displayName);
+                                    ?>
+                                </td>
                                 <td>$<?php echo number_format($account['balance'], 2); ?></td>
                             </tr>
                         <?php endforeach; ?>
