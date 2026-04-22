@@ -4,6 +4,8 @@ include 'db_connect.php';
 
 $user_id = $_SESSION['user_id'];
 
+$as_of_date = $_GET['as_of_date'] ?? date('Y-m-d');
+
 $assets = [];
 $liabilities = [];
 $equity = [];
@@ -16,12 +18,25 @@ $errorMessage = "";
 
 /*
 |--------------------------------------------------------------------------
+| Validate selected date
+|--------------------------------------------------------------------------
+*/
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $as_of_date)) {
+    $as_of_date = date('Y-m-d');
+}
+
+/*
+|--------------------------------------------------------------------------
 | Load balance sheet accounts (Assets, Liabilities, Equity)
 |--------------------------------------------------------------------------
 |
 | Balance rules:
-| - Asset / Expense increase with debits, decrease with credits
-| - Liability / Equity / Revenue increase with credits, decrease with debits
+| - Asset accounts increase with debits, decrease with credits
+| - Liability / Equity accounts increase with credits, decrease with debits
+|
+| IMPORTANT:
+| - Balance Sheet is "as of" a date, so only include transactions where
+|   transaction_date <= selected date
 |
 */
 $balanceSheetSql = "
@@ -35,12 +50,12 @@ $balanceSheetSql = "
             CASE
                 WHEN t.debit_account_id = a.account_id THEN
                     CASE
-                        WHEN a.account_type IN ('Asset', 'Expense') THEN t.amount
+                        WHEN a.account_type = 'Asset' THEN t.amount
                         ELSE -t.amount
                     END
                 WHEN t.credit_account_id = a.account_id THEN
                     CASE
-                        WHEN a.account_type IN ('Liability', 'Equity', 'Revenue') THEN t.amount
+                        WHEN a.account_type IN ('Liability', 'Equity') THEN t.amount
                         ELSE -t.amount
                     END
                 ELSE 0
@@ -48,8 +63,11 @@ $balanceSheetSql = "
         ), 0) AS balance
     FROM Account a
     LEFT JOIN `Transaction` t
-        ON a.account_id = t.debit_account_id
-        OR a.account_id = t.credit_account_id
+        ON (
+            a.account_id = t.debit_account_id
+            OR a.account_id = t.credit_account_id
+        )
+        AND t.transaction_date <= ?
     WHERE a.user_id = ?
       AND a.account_type IN ('Asset', 'Liability', 'Equity')
     GROUP BY
@@ -69,7 +87,7 @@ $balanceStmt = $conn->prepare($balanceSheetSql);
 if (!$balanceStmt) {
     $errorMessage = "Prepare failed while loading balance sheet accounts: " . $conn->error;
 } else {
-    $balanceStmt->bind_param("i", $user_id);
+    $balanceStmt->bind_param("si", $as_of_date, $user_id);
     $balanceStmt->execute();
     $balanceResult = $balanceStmt->get_result();
 
@@ -93,7 +111,7 @@ if (!$balanceStmt) {
 
 /*
 |--------------------------------------------------------------------------
-| Calculate net income
+| Calculate net income through selected date
 |--------------------------------------------------------------------------
 |
 | Net Income = Revenues - Expenses
@@ -116,8 +134,11 @@ if (empty($errorMessage)) {
             ), 0) AS net_income
         FROM Account a
         LEFT JOIN `Transaction` t
-            ON a.account_id = t.debit_account_id
-            OR a.account_id = t.credit_account_id
+            ON (
+                a.account_id = t.debit_account_id
+                OR a.account_id = t.credit_account_id
+            )
+            AND t.transaction_date <= ?
         WHERE a.user_id = ?
           AND a.account_type IN ('Revenue', 'Expense')
     ";
@@ -127,7 +148,7 @@ if (empty($errorMessage)) {
     if (!$netStmt) {
         $errorMessage = "Prepare failed while calculating net income: " . $conn->error;
     } else {
-        $netStmt->bind_param("i", $user_id);
+        $netStmt->bind_param("si", $as_of_date, $user_id);
         $netStmt->execute();
         $netResult = $netStmt->get_result();
 
@@ -166,6 +187,17 @@ function formatAccountDisplayName(array $account): string
 
     return $displayName;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Helper for formatted statement date
+|--------------------------------------------------------------------------
+*/
+function formatStatementDate(string $date): string
+{
+    $timestamp = strtotime($date);
+    return $timestamp ? date('F d, Y', $timestamp) : date('F d, Y');
+}
 ?>
 
 <!DOCTYPE html>
@@ -181,7 +213,28 @@ function formatAccountDisplayName(array $account): string
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
+            align-items: end;
             margin-bottom: 24px;
+        }
+
+        .statement-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .statement-filter-group label {
+            font-weight: 600;
+            color: #334155;
+        }
+
+        .statement-toolbar input[type="date"] {
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            background: #fff;
+            color: #0f172a;
         }
 
         .statement-paper {
@@ -287,6 +340,11 @@ function formatAccountDisplayName(array $account): string
             .statement-paper {
                 padding: 28px;
             }
+
+            .statement-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
         }
 
         @media print {
@@ -326,9 +384,20 @@ function formatAccountDisplayName(array $account): string
 <?php include 'navbar.php'; ?>
 
 <div class="main-content">
-    <div class="statement-toolbar no-print">
+    <form method="GET" class="statement-toolbar no-print">
+        <div class="statement-filter-group">
+            <label for="as_of_date">As of Date</label>
+            <input
+                type="date"
+                id="as_of_date"
+                name="as_of_date"
+                value="<?php echo htmlspecialchars($as_of_date); ?>"
+            >
+        </div>
+
+        <button type="submit" class="btn btn-primary">Apply Date</button>
         <button type="button" class="btn btn-primary" onclick="window.print()">Save as PDF / Print</button>
-    </div>
+    </form>
 
     <?php if (!empty($errorMessage)) : ?>
         <div class="card" style="max-width: 1000px; margin: 0 auto;">
@@ -341,7 +410,7 @@ function formatAccountDisplayName(array $account): string
             <div class="statement-header">
                 <h1>Secure Ledger</h1>
                 <p><strong>Balance Sheet</strong></p>
-                <p>As of <?php echo date('F d, Y'); ?></p>
+                <p>As of <?php echo htmlspecialchars(formatStatementDate($as_of_date)); ?></p>
             </div>
 
             <div class="balance-grid">

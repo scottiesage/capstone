@@ -1,11 +1,4 @@
 -- =========================
--- RESET DATABASE
--- =========================
-DROP DATABASE IF EXISTS secureledger;
-CREATE DATABASE secureledger;
-USE secureledger;
-
--- =========================
 -- USER TABLE
 -- =========================
 CREATE TABLE User (
@@ -13,12 +6,10 @@ CREATE TABLE User (
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
 
-    -- 2FA
     verification_code VARCHAR(10) DEFAULT NULL,
     verification_expires DATETIME DEFAULT NULL,
     is_verified BOOLEAN DEFAULT FALSE,
 
-    -- PASSWORD RESET
     reset_code VARCHAR(6) DEFAULT NULL,
     reset_expires DATETIME DEFAULT NULL,
 
@@ -27,9 +18,6 @@ CREATE TABLE User (
 
 -- =========================
 -- ACCOUNT TABLE
--- Added:
--- - account_code
--- - unique account name per user
 -- =========================
 CREATE TABLE Account (
     account_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -50,10 +38,6 @@ CREATE TABLE Account (
 
 -- =========================
 -- VENDOR TABLE
--- Updated:
--- - vendor_name now required
--- - added address and notes fields
--- - unique vendor name per user
 -- =========================
 CREATE TABLE Vendor (
     vendor_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -79,8 +63,6 @@ CREATE TABLE Vendor (
 
 -- =========================
 -- TRANSACTION TABLE
--- Double-entry accounting:
--- every transaction requires a debit and credit account
 -- =========================
 CREATE TABLE `Transaction` (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -158,85 +140,3 @@ CREATE TABLE Alert (
         FOREIGN KEY (transaction_id) REFERENCES `Transaction`(transaction_id)
         ON DELETE SET NULL
 );
-
--- =========================
--- SAMPLE USERS
--- Password: password123
--- =========================
-INSERT INTO User (email, password_hash)
-VALUES
-('testuser@example.com', '$2y$10$zG2BDB8Lazc.Vqi4DhnN8Ogjvx5FTX3rljXHsPujuVBCnzAylaegy'),
-('demo@example.com', '$2y$10$zG2BDB8Lazc.Vqi4DhnN8Ogjvx5FTX3rljXHsPujuVBCnzAylaegy');
-
--- =========================
--- SAMPLE ACCOUNTS
--- Added account_code values
--- =========================
-INSERT INTO Account (user_id, account_code, account_name, account_type)
-VALUES
-(1, '1000', 'Cash', 'Asset'),
-(1, '1100', 'Accounts Receivable', 'Asset'),
-(1, '2000', 'Accounts Payable', 'Liability'),
-(1, '3000', 'Owner Equity', 'Equity'),
-(1, '4000', 'Sales Revenue', 'Revenue'),
-(1, '5000', 'Office Supplies Expense', 'Expense'),
-(1, '1500', 'Equipment', 'Asset');
-
--- =========================
--- SAMPLE VENDORS
--- Added address/notes fields
--- =========================
-INSERT INTO Vendor (
-    user_id, vendor_name, email, phone,
-    address_line1, city, state, zip_code, notes
-)
-VALUES
-(1, 'Amazon', 'support@amazon.com', '800-123-4567',
- '410 Terry Ave N', 'Seattle', 'WA', '98109', 'Online vendor'),
-(1, 'Staples', 'support@staples.com', '800-222-3333',
- '500 Staples Drive', 'Framingham', 'MA', '01702', 'Office supply vendor'),
-(1, 'Client A', 'clienta@email.com', '757-555-1111',
- '123 Client Lane', 'Norfolk', 'VA', '23510', 'Consulting client');
-
--- =========================
--- SAMPLE TRANSACTIONS
--- =========================
-INSERT INTO `Transaction`
-(
-    user_id, vendor_id, customer_name, transaction_type, transaction_date, amount,
-    debit_account_id, credit_account_id, description, memo, category, source
-)
-VALUES
--- Office supplies purchase
-(1, 1, NULL, 'Purchase', '2026-03-01', 150.00,
- 6, 1, 'Office supplies purchase', '', 'Supplies', 'Manual'),
-
--- Equipment purchase
-(1, 2, NULL, 'Purchase', '2026-03-02', 200.00,
- 7, 1, 'Printer purchase', '', 'Equipment', 'Manual'),
-
--- Consulting revenue
-(1, 3, 'Client A', 'Sale', '2026-03-03', 500.00,
- 1, 5, 'Consulting revenue', '', 'Income', 'Manual'),
-
--- Duplicate-style transaction for testing
-(1, 1, NULL, 'Purchase', '2026-03-01', 150.00,
- 6, 1, 'Duplicate office supplies', '', 'Supplies', 'Manual');
-
--- =========================
--- DETECTION RULES
--- =========================
-INSERT INTO DetectionRule (rule_name, rule_category, severity, is_active)
-VALUES
-('Duplicate Transaction', 'Error', 'High', TRUE),
-('Unusual Amount', 'Fraud', 'Medium', TRUE),
-('High Frequency Vendor Usage', 'Fraud', 'Medium', TRUE);
-
--- =========================
--- SAMPLE ALERTS
--- =========================
-INSERT INTO Alert (user_id, rule_id, transaction_id, status, message)
-VALUES
-(1, 1, 4, 'Open', 'Possible duplicate transaction detected'),
-(1, 2, 3, 'Open', 'Transaction amount higher than usual'),
-(1, 3, 1, 'Reviewed', 'Multiple transactions with same vendor in short period');
